@@ -163,6 +163,31 @@ int fdt_first_subnode(const void *fdt, int offset);
  */
 int fdt_next_subnode(const void *fdt, int offset);
 
+/**
+ * fdt_for_each_subnode - iterate over all subnodes of a parent
+ *
+ * This is actually a wrapper around a for loop and would be used like so:
+ *
+ *	fdt_for_each_subnode(fdt, node, parent) {
+ *		...
+ *		use node
+ *		...
+ *	}
+ *
+ * Note that this is implemented as a macro and node is used as iterator in
+ * the loop. It should therefore be a locally allocated variable. The parent
+ * variable on the other hand is never modified, so it can be constant or
+ * even a literal.
+ *
+ * @fdt:	FDT blob (const void *)
+ * @node:	child node (int)
+ * @parent:	parent node (int)
+ */
+#define fdt_for_each_subnode(fdt, node, parent)		\
+	for (node = fdt_first_subnode(fdt, parent);	\
+	     node >= 0;					\
+	     node = fdt_next_subnode(fdt, node))
+
 /**********************************************************************/
 /* General functions                                                  */
 /**********************************************************************/
@@ -781,6 +806,30 @@ int fdt_node_offset_by_prop_value(const void *fdt, int startoffset,
  */
 int fdt_node_offset_by_phandle(const void *fdt, uint32_t phandle);
 
+#ifdef CONFIG_ROCKCHIP
+/**
+ * fdt_node_offset_by_phandle_node - find the node with a given phandle and node
+ * @fdt: pointer to the device tree blob
+ * @phandle: phandle value
+ * @node: start node value
+ *
+ * fdt_node_offset_by_phandle_node() returns the offset of the node
+ * which has the given phandle value.  If there is more than one node
+ * in the tree with the given phandle (an invalid tree), results are
+ * undefined.
+ *
+ * returns:
+ *	structure block offset of the located node (>= 0), on success
+ *	-FDT_ERR_NOTFOUND, no node with that phandle exists
+ *	-FDT_ERR_BADPHANDLE, given phandle value was invalid (0 or -1)
+ *	-FDT_ERR_BADMAGIC,
+ *	-FDT_ERR_BADVERSION,
+ *	-FDT_ERR_BADSTATE,
+ *	-FDT_ERR_BADSTRUCTURE, standard meanings
+ */
+int fdt_node_offset_by_phandle_node(const void *fdt, int node, uint32_t phandle);
+#endif /* CONFIG_ROCKCHIP */
+
 /**
  * fdt_node_check_compatible: check a node's compatible property
  * @fdt: pointer to the device tree blob
@@ -856,6 +905,53 @@ int fdt_node_offset_by_compatible(const void *fdt, int startoffset,
  * @return: 1 if the string is found in the list, 0 not found, or invalid list
  */
 int fdt_stringlist_contains(const char *strlist, int listlen, const char *str);
+
+/**
+ * fdt_count_strings - count the number of strings in a string list
+ * @fdt: pointer to the device tree blob
+ * @node: offset of the node
+ * @property: name of the property containing the string list
+ * @return: the number of strings in the given property
+ */
+int fdt_count_strings(const void *fdt, int node, const char *property);
+
+/**
+ * fdt_find_string - find a string in a string list and return its index
+ * @fdt: pointer to the device tree blob
+ * @node: offset of the node
+ * @property: name of the property containing the string list
+ * @string: string to look up in the string list
+ * @return: the index of the string or negative on error
+ */
+int fdt_find_string(const void *fdt, int node, const char *property,
+		    const char *string);
+
+/**
+ * fdt_get_string_index() - obtain the string at a given index in a string list
+ * @fdt: pointer to the device tree blob
+ * @node: offset of the node
+ * @property: name of the property containing the string list
+ * @index: index of the string to return
+ * @output: return location for the string
+ * @return: 0 if the string was found or a negative error code otherwise
+ */
+int fdt_get_string_index(const void *fdt, int node, const char *property,
+			 int index, const char **output);
+
+/**
+ * fdt_get_string() - obtain the first string in a string list
+ * @fdt: pointer to the device tree blob
+ * @node: offset of the node
+ * @property: name of the property containing the string list
+ * @output: return location for the string
+ * @return: 0 if the string was found or a negative error code otherwise
+ *
+ * This is a shortcut for:
+ *
+ *	fdt_get_string_index(fdt, node, property, 0, output).
+ */
+int fdt_get_string(const void *fdt, int node, const char *property,
+		   const char **output);
 
 /**********************************************************************/
 /* Read-only functions (addressing related)                           */
@@ -1637,5 +1733,9 @@ int fdt_find_regions(const void *fdt, char * const inc[], int inc_count,
 		     char * const exc_prop[], int exc_prop_count,
 		     struct fdt_region region[], int max_regions,
 		     char *path, int path_len, int add_string_tab);
+
+#ifdef CONFIG_ROCKCHIP
+int fdt_device_is_available(const void *blob, int node);
+#endif /* CONFIG_ROCKCHIP */
 
 #endif /* _LIBFDT_H */

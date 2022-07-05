@@ -25,9 +25,9 @@ void set_pgtable_section(u64 *page_table, u64 index, u64 section,
 /* to activate the MMU we need to set up virtual memory */
 static void mmu_setup(void)
 {
-	int i, j, el;
 	bd_t *bd = gd->bd;
-	u64 *page_table = (u64 *)gd->arch.tlb_addr;
+	u64 *page_table = (u64 *)gd->arch.tlb_addr, i, j;
+	int el;
 
 	/* Setup an identity-mapping for all spaces */
 	for (i = 0; i < (PGTABLE_SIZE >> 3); i++) {
@@ -39,6 +39,11 @@ static void mmu_setup(void)
 	for (i = 0; i < CONFIG_NR_DRAM_BANKS; i++) {
 		ulong start = bd->bi_dram[i].start;
 		ulong end = bd->bi_dram[i].start + bd->bi_dram[i].size;
+#ifdef CONFIG_ROCKCHIP
+		debug("start = 0x%08lx, end = 0x%08lx\n", start, end);
+		end = ((end + SECTION_SIZE - 1) / SECTION_SIZE) * SECTION_SIZE;
+		debug("start = 0x%08lx, end = 0x%08lx\n", start, end);
+#endif /* CONFIG_ROCKCHIP */
 		for (j = start >> SECTION_SHIFT;
 		     j < end >> SECTION_SHIFT; j++) {
 			set_pgtable_section(page_table, j, j << SECTION_SHIFT,
@@ -50,15 +55,15 @@ static void mmu_setup(void)
 	el = current_el();
 	if (el == 1) {
 		set_ttbr_tcr_mair(el, gd->arch.tlb_addr,
-				  TCR_FLAGS | TCR_EL1_IPS_BITS,
+				  TCR_EL1_RSVD | TCR_FLAGS | TCR_EL1_IPS_BITS,
 				  MEMORY_ATTRIBUTES);
 	} else if (el == 2) {
 		set_ttbr_tcr_mair(el, gd->arch.tlb_addr,
-				  TCR_FLAGS | TCR_EL2_IPS_BITS,
+				  TCR_EL2_RSVD | TCR_FLAGS | TCR_EL2_IPS_BITS,
 				  MEMORY_ATTRIBUTES);
 	} else {
 		set_ttbr_tcr_mair(el, gd->arch.tlb_addr,
-				  TCR_FLAGS | TCR_EL3_IPS_BITS,
+				  TCR_EL3_RSVD | TCR_FLAGS | TCR_EL3_IPS_BITS,
 				  MEMORY_ATTRIBUTES);
 	}
 	/* enable the mmu */
@@ -124,10 +129,17 @@ void dcache_disable(void)
 	if (!(sctlr & CR_C))
 		return;
 
+#ifndef CONFIG_ROCKCHIP
 	set_sctlr(sctlr & ~(CR_C|CR_M));
 
 	flush_dcache_all();
 	__asm_invalidate_tlb_all();
+#else
+	flush_dcache_all();
+	__asm_invalidate_tlb_all();
+
+	set_sctlr(sctlr & ~(CR_C|CR_M));
+#endif /* CONFIG_ROCKCHIP */
 }
 
 int dcache_status(void)

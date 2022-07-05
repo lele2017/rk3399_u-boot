@@ -57,6 +57,10 @@
 #include <dm/root.h>
 #include <linux/compiler.h>
 
+#ifdef CONFIG_ROCKCHIP
+#include <asm/arch/rkplat.h>
+#endif
+
 /*
  * Pointer to initial global data area
  *
@@ -128,13 +132,10 @@ int init_func_watchdog_reset(void)
 }
 #endif /* CONFIG_WATCHDOG */
 
-void __board_add_ram_info(int use_default)
+__weak void board_add_ram_info(int use_default)
 {
 	/* please define platform specific board_add_ram_info() */
 }
-
-void board_add_ram_info(int)
-	__attribute__ ((weak, alias("__board_add_ram_info")));
 
 static int init_baud_rate(void)
 {
@@ -161,6 +162,7 @@ static int display_text_info(void)
 #ifdef CONFIG_MODEM_SUPPORT
 	debug("Modem Support enabled\n");
 #endif
+
 #ifdef CONFIG_USE_IRQ
 	debug("IRQ Stack: %08lx\n", IRQ_STACK_START);
 	debug("FIQ Stack: %08lx\n", FIQ_STACK_START);
@@ -221,16 +223,13 @@ static int show_dram_config(void)
 	return 0;
 }
 
-void __dram_init_banksize(void)
+__weak void dram_init_banksize(void)
 {
 #if defined(CONFIG_NR_DRAM_BANKS) && defined(CONFIG_SYS_SDRAM_BASE)
 	gd->bd->bi_dram[0].start = CONFIG_SYS_SDRAM_BASE;
 	gd->bd->bi_dram[0].size = get_effective_memsize();
 #endif
 }
-
-void dram_init_banksize(void)
-	__attribute__((weak, alias("__dram_init_banksize")));
 
 #if defined(CONFIG_HARD_I2C) || defined(CONFIG_SYS_I2C)
 static int init_func_i2c(void)
@@ -457,9 +456,18 @@ static int reserve_mmu(void)
 }
 #endif
 
-#ifdef CONFIG_LCD
+#if defined(CONFIG_LCD) || defined(CONFIG_ROCKCHIP_DISPLAY)
 static int reserve_lcd(void)
 {
+	/* if defind CONFIG_RK_FB_SIZE, set fb base at the end of ddr address */
+#if defined(CONFIG_ROCKCHIP) && defined(CONFIG_RK_FB_DDREND)
+	/* using ddr end address - CONFIG_RK_LCD_SIZE - SZ_4M, reserve 4M for 1.5G or 3G size ddr used */
+	gd->fb_base = (gd->arch.ddr_end - CONFIG_RK_LCD_SIZE - SZ_4M);
+	debug("LCD base at ddr end, fb base = %08lx, size = %08x\n", gd->fb_base, CONFIG_RK_FB_SIZE);
+
+	return 0;
+#endif
+
 #ifdef CONFIG_FB_ADDR
 	gd->fb_base = CONFIG_FB_ADDR;
 #else
@@ -482,6 +490,37 @@ static int reserve_trace(void)
 
 	return 0;
 }
+
+#ifdef CONFIG_ROCKCHIP
+static int reserve_global_buffers(void)
+{
+	/* reserve rk global buffer */
+	gd->relocaddr -= CONFIG_RK_GLOBAL_BUFFER_SIZE;
+	gd->arch.rk_global_buf_addr = (unsigned long)map_sysmem(gd->relocaddr, CONFIG_RK_GLOBAL_BUFFER_SIZE);
+	debug("Reserving %dk for rk global buffer at %08lx\n",
+			CONFIG_RK_GLOBAL_BUFFER_SIZE >> 10, gd->arch.rk_global_buf_addr);
+
+	/* reserve rk boot buffer */
+	gd->relocaddr -= CONFIG_RK_BOOT_BUFFER_SIZE;
+	gd->arch.rk_boot_buf_addr = (unsigned long)map_sysmem(gd->relocaddr, CONFIG_RK_BOOT_BUFFER_SIZE);
+	debug("Reserving %dk for rk boot buffer at %08lx\n",
+			CONFIG_RK_BOOT_BUFFER_SIZE >> 10, gd->arch.rk_boot_buf_addr);
+
+#ifdef CONFIG_CMD_FASTBOOT
+	/* using rk boot buffer for fbt buffer */
+	gd->arch.fastboot_buf_addr = gd->arch.rk_boot_buf_addr;
+	debug("Using rk boot buffer as Fastboot transfer buffer.\n");
+
+	/* reserve fastboot log buffer */
+	gd->relocaddr -= CONFIG_FASTBOOT_LOG_SIZE;
+	gd->arch.fastboot_log_buf_addr = (unsigned long)map_sysmem(gd->relocaddr, CONFIG_FASTBOOT_LOG_SIZE);
+	debug("Reserving %dk for fastboot log buffer at %08lx\n",
+			CONFIG_FASTBOOT_LOG_SIZE >> 10, gd->arch.fastboot_log_buf_addr);
+#endif /* CONFIG_CMD_FASTBOOT */
+
+	return 0;
+}
+#endif
 
 #if defined(CONFIG_VIDEO) && (!defined(CONFIG_PPC) || defined(CONFIG_8xx)) && \
 		!defined(CONFIG_ARM) && !defined(CONFIG_X86) && \
@@ -577,48 +616,22 @@ static int reserve_fdt(void)
 	return 0;
 }
 
+int arch_reserve_stacks(void)
+{
+	return 0;
+}
+
 static int reserve_stacks(void)
 {
-#ifdef CONFIG_SPL_BUILD
-# ifdef CONFIG_ARM
-	gd->start_addr_sp -= 128;	/* leave 32 words for abort-stack */
-	gd->irq_sp = gd->start_addr_sp;
-# endif
-#else
-# ifdef CONFIG_PPC
-	ulong *s;
-# endif
-
-	/* setup stack pointer for exceptions */
+	/* make stack pointer 16-byte aligned */
 	gd->start_addr_sp -= 16;
 	gd->start_addr_sp &= ~0xf;
-	gd->irq_sp = gd->start_addr_sp;
 
 	/*
-	 * Handle architecture-specific things here
-	 * TODO(sjg@chromium.org): Perhaps create arch_reserve_stack()
-	 * to handle this and put in arch/xxx/lib/stack.c
+	 * let the architecture specific code tailor gd->start_addr_sp and
+	 * gd->irq_sp
 	 */
-# if defined(CONFIG_ARM) && !defined(CONFIG_ARM64)
-#  ifdef CONFIG_USE_IRQ
-	gd->start_addr_sp -= (CONFIG_STACKSIZE_IRQ + CONFIG_STACKSIZE_FIQ);
-	debug("Reserving %zu Bytes for IRQ stack at: %08lx\n",
-		CONFIG_STACKSIZE_IRQ + CONFIG_STACKSIZE_FIQ, gd->start_addr_sp);
-
-	/* 8-byte alignment for ARM ABI compliance */
-	gd->start_addr_sp &= ~0x07;
-#  endif
-	/* leave 3 words for abort-stack, plus 1 for alignment */
-	gd->start_addr_sp -= 16;
-# elif defined(CONFIG_PPC)
-	/* Clear initial stack frame */
-	s = (ulong *) gd->start_addr_sp;
-	*s = 0; /* Terminate back chain */
-	*++s = 0; /* NULL return address */
-# endif /* Architecture specific code */
-
-	return 0;
-#endif
+	return arch_reserve_stacks();
 }
 
 static int display_new_sp(void)
@@ -737,6 +750,7 @@ static int reloc_fdt(void)
 
 static int setup_reloc(void)
 {
+#ifndef CONFIG_SKIP_RELOCATE_UBOOT
 #ifdef CONFIG_SYS_TEXT_BASE
 	gd->reloc_off = gd->relocaddr - CONFIG_SYS_TEXT_BASE;
 #endif
@@ -748,6 +762,17 @@ static int setup_reloc(void)
 	      gd->start_addr_sp);
 
 	return 0;
+#else
+	gd->reloc_off = 0;
+	memcpy(gd->new_gd, (char *)gd, sizeof(gd_t));
+
+	debug("Relocation Offset is: %08lx\n", gd->reloc_off);
+	debug("new gd at %08lx, sp at %08lx\n",
+	      (ulong)map_to_sysmem(gd->new_gd),
+	      gd->start_addr_sp);
+
+	return 0;
+#endif
 }
 
 /* ARM calls relocate_code from its crt0.S */
@@ -817,7 +842,10 @@ static init_fnc_t init_sequence_f[] = {
 #endif
 	setup_mon_len,
 	setup_fdt,
+#ifdef CONFIG_TRACE
 	trace_early_init,
+#endif
+	initf_malloc,
 #if defined(CONFIG_MPC85xx) || defined(CONFIG_MPC86xx)
 	/* TODO: can this go into arch_cpu_init()? */
 	probecpu,
@@ -833,7 +861,6 @@ static init_fnc_t init_sequence_f[] = {
 #ifdef CONFIG_OF_CONTROL
 	fdtdec_check_fdt,
 #endif
-	initf_malloc,
 	initf_dm,
 #if defined(CONFIG_BOARD_EARLY_INIT_F)
 	board_early_init_f,
@@ -896,7 +923,7 @@ static init_fnc_t init_sequence_f[] = {
 	prt_mpc5xxx_clks,
 #endif /* CONFIG_MPC5xxx */
 #if defined(CONFIG_DISPLAY_BOARDINFO)
-	checkboard,		/* display board info */
+	show_board_info,
 #endif
 	INIT_FUNC_WATCHDOG_INIT
 #if defined(CONFIG_MISC_INIT_F)
@@ -962,8 +989,11 @@ static init_fnc_t init_sequence_f[] = {
 		defined(CONFIG_ARM)
 	reserve_mmu,
 #endif
-#ifdef CONFIG_LCD
+#if defined(CONFIG_LCD) || defined(CONFIG_ROCKCHIP_DISPLAY)
 	reserve_lcd,
+#endif
+#ifdef CONFIG_ROCKCHIP
+	reserve_global_buffers,
 #endif
 	reserve_trace,
 	/* TODO: Why the dependency on CONFIG_8xx? */

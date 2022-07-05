@@ -26,6 +26,62 @@ struct arch_global_data {
 	unsigned long	pllb_rate_hz;
 	unsigned long	at91_pllb_usb_init;
 #endif
+
+#ifdef CONFIG_ROCKCHIP
+	unsigned long	chiptype;
+	unsigned long	cpuversion;
+#ifdef CONFIG_RK_FB_DDREND
+	unsigned long	ddr_end;
+#endif
+
+#ifdef CONFIG_RK_CLOCK
+	/* "static data" needed by rk's clock.c */
+#if defined(CONFIG_RKCHIP_RK3288)
+	unsigned long	cpu_mp_rate_hz;
+	unsigned long	cpu_m0_rate_hz;
+	unsigned long	cpu_l2ram_rate_hz;
+
+	unsigned long	aclk_periph_rate_hz;
+	unsigned long	pclk_periph_rate_hz;
+	unsigned long	hclk_periph_rate_hz;
+
+	unsigned long	aclk_bus_rate_hz;
+	unsigned long	pclk_bus_rate_hz;
+	unsigned long	hclk_bus_rate_hz;
+#elif defined(CONFIG_RKCHIP_RK3368) || defined(CONFIG_RKCHIP_RK322X) || defined(CONFIG_RKCHIP_RK3366)\
+	|| defined(CONFIG_RKCHIP_RK322XH)
+	unsigned long	aclk_periph_rate_hz;
+	unsigned long	pclk_periph_rate_hz;
+	unsigned long	hclk_periph_rate_hz;
+
+	unsigned long	aclk_bus_rate_hz;
+	unsigned long	pclk_bus_rate_hz;
+	unsigned long	hclk_bus_rate_hz;
+#elif defined(CONFIG_RKCHIP_RK3036) || defined(CONFIG_RKCHIP_RK3126) || defined(CONFIG_RKCHIP_RK3128)
+	unsigned long	aclk_cpu_rate_hz;
+	unsigned long	pclk_cpu_rate_hz;
+	unsigned long	hclk_cpu_rate_hz;
+
+	unsigned long	aclk_periph_rate_hz;
+	unsigned long	pclk_periph_rate_hz;
+	unsigned long	hclk_periph_rate_hz;
+#elif defined(CONFIG_RKCHIP_RK3399)
+	unsigned long	aclk_periph_h_rate_hz;
+	unsigned long	pclk_periph_h_rate_hz;
+	unsigned long	hclk_periph_h_rate_hz;
+
+	unsigned long	aclk_periph_l0_rate_hz;
+	unsigned long	pclk_periph_l0_rate_hz;
+	unsigned long	hclk_periph_l0_rate_hz;
+
+	unsigned long	pclk_periph_l1_rate_hz;
+	unsigned long	hclk_periph_l1_rate_hz;
+#else
+	#error "PLS config chiptype for clock!"
+#endif
+
+#endif /* CONFIG_RK_CLOCK */
+#endif /* CONFIG_ROCKCHIP */
 	/* "static data" needed by most of timer.c on ARM platforms */
 	unsigned long timer_rate_hz;
 	unsigned long tbu;
@@ -39,6 +95,14 @@ struct arch_global_data {
 
 #ifdef CONFIG_OMAP
 	struct omap_boot_parameters omap_boot_params;
+#endif
+#ifdef CONFIG_ROCKCHIP
+	unsigned long rk_global_buf_addr;
+	unsigned long rk_boot_buf_addr;
+#endif
+#ifdef CONFIG_CMD_FASTBOOT
+	unsigned long fastboot_buf_addr;
+	unsigned long fastboot_log_buf_addr;
 #endif
 };
 

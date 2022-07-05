@@ -102,6 +102,25 @@ static inline int bootm_maybe_autostart(cmd_tbl_t *cmdtp, const char *cmd)
 }
 #endif
 
+#ifdef CONFIG_ROCKCHIP
+
+#ifdef CONFIG_CMD_BOOTRK
+extern int do_bootrk(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[]);
+#endif
+
+#ifdef CONFIG_CMD_CHARGE_ANIM
+extern int do_charge(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[]);
+#endif
+
+#ifdef CONFIG_CMD_ROCKUSB
+extern int do_rockusb(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]);
+#endif
+extern int do_go(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[]);
+extern int do_env_save(cmd_tbl_t *cmdtp, int flag, int argc,
+        char *const argv[]);
+
+#endif /* CONFIG_ROCKCHIP */
+
 extern int do_bootz(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]);
 
 extern int common_diskboot(cmd_tbl_t *cmdtp, const char *intf, int argc,

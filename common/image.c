@@ -62,6 +62,7 @@ static const image_header_t *image_get_ramdisk(ulong rd_addr, uint8_t arch,
 #endif
 
 static const table_entry_t uimage_arch[] = {
+#ifndef CONFIG_ROCKCHIP
 	{	IH_ARCH_INVALID,	NULL,		"Invalid ARCH",	},
 	{	IH_ARCH_ALPHA,		"alpha",	"Alpha",	},
 	{	IH_ARCH_ARM,		"arm",		"ARM",		},
@@ -85,10 +86,15 @@ static const table_entry_t uimage_arch[] = {
 	{	IH_ARCH_SANDBOX,	"sandbox",	"Sandbox",	},
 	{	IH_ARCH_ARM64,		"arm64",	"AArch64",	},
 	{	IH_ARCH_ARC,		"arc",		"ARC",		},
+#else
+	{	IH_ARCH_ARM64,		"arm64",	"AArch64",	},
+	{	IH_ARCH_ARM,		"arm",		"ARM",		},
+#endif /* CONFIG_ROCKCHIP */
 	{	-1,			"",		"",		},
 };
 
 static const table_entry_t uimage_os[] = {
+#ifndef CONFIG_ROCKCHIP
 	{	IH_OS_INVALID,	NULL,		"Invalid OS",		},
 	{	IH_OS_LINUX,	"linux",	"Linux",		},
 #if defined(CONFIG_LYNXKDI) || defined(USE_HOSTCC)
@@ -119,10 +125,14 @@ static const table_entry_t uimage_os[] = {
 	{	IH_OS_SOLARIS,	"solaris",	"Solaris",		},
 	{	IH_OS_SVR4,	"svr4",		"SVR4",			},
 #endif
+#else
+	{	IH_OS_LINUX,	"linux",	"Linux",		},
+#endif /* CONFIG_ROCKCHIP */
 	{	-1,		"",		"",			},
 };
 
 static const table_entry_t uimage_type[] = {
+#ifndef CONFIG_ROCKCHIP
 	{	IH_TYPE_AISIMAGE,   "aisimage",   "Davinci AIS image",},
 	{	IH_TYPE_FILESYSTEM, "filesystem", "Filesystem Image",	},
 	{	IH_TYPE_FIRMWARE,   "firmware",	  "Firmware",		},
@@ -143,6 +153,9 @@ static const table_entry_t uimage_type[] = {
 	{	IH_TYPE_UBLIMAGE,   "ublimage",   "Davinci UBL image",},
 	{	IH_TYPE_MXSIMAGE,   "mxsimage",   "Freescale MXS Boot Image",},
 	{	IH_TYPE_ATMELIMAGE, "atmelimage", "ATMEL ROM-Boot Image",},
+#else
+	{	IH_TYPE_KERNEL,	    "kernel",	  "Kernel Image",	},
+#endif /* CONFIG_ROCKCHIP */
 	{	-1,		    "",		  "",			},
 };
 
@@ -1097,8 +1110,7 @@ int boot_ramdisk_high(struct lmb *lmb, ulong rd_data, ulong rd_len,
 						rd_len, 0x1000, initrd_high);
 			else
 				*initrd_start = (ulong)lmb_alloc(lmb, rd_len,
-								 0x1000);
-
+						0x1000);
 			if (*initrd_start == 0) {
 				puts("ramdisk - allocation error\n");
 				goto error;

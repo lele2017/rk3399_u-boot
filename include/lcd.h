@@ -237,6 +237,130 @@ typedef struct vidinfo {
 
 void init_panel_info(vidinfo_t *vid);
 
+#elif defined(CONFIG_RK_FB)
+
+#ifdef CONFIG_RK_3168_FB
+enum exynos_fb_data_format_t {
+	RGB888 = 0,
+	RGB565 = 1,
+	YUV422 = 2,
+	YUV420 = 3,
+	YUV444 = 5,
+	AYUV = 6,
+};
+#else
+enum exynos_fb_data_format_t {
+	ARGB888 = 0,
+	RGB888 = 1,
+	RGB565 = 2,
+	YUV420 = 4,
+	YUV422 = 5,
+	YUV444 = 6,
+};
+
+#endif
+
+enum lay_id {
+	WIN0 = 0,
+	WIN1,
+	NUM_LAYERS,
+};
+
+struct fb_dsp_info{
+	enum lay_id layer_id;
+	enum exynos_fb_data_format_t format;
+	u32 yaddr;
+	u32 cbraddr;  // Cbr memory start address
+	u32 xpos;         //start point in panel  --->LCDC_WINx_DSP_ST
+	u32 ypos;
+	u16 xsize;        // display window width/height  -->LCDC_WINx_DSP_INFO
+	u16 ysize;          
+	u16 xact;        //origin display window size -->LCDC_WINx_ACT_INFO
+	u16 yact;
+	u16 xvir;       //virtual width/height     -->LCDC_WINx_VIR
+	u16 yvir;
+	u8 xmirror;
+	u8 ymirror;
+};
+struct layer_par {
+	int id;
+	bool state; 	//on or off
+	struct fb_dsp_info fb_info;
+	u8 fmt_cfg;
+};
+typedef struct vidinfo {
+	u_char lcd_face;    /* lcd rgb tye (i.e. RGB888) */
+	ushort vl_col;		/* Number of columns (i.e. 640) */
+	ushort vl_row;		/* Number of rows (i.e. 480) */
+	ushort vl_width;	/* Width of display area in millimeters */
+	ushort vl_height;	/* Height of display area in millimeters */
+
+	/* LCD configuration register */
+	int vl_freq;		/* Frequency */
+	u_char vl_clkp;		/* Clock polarity */
+	u_char vl_oep;		/* Output Enable polarity */
+	u_char vl_hsp;		/* Horizontal Sync polarity */
+	u_char vl_vsp;		/* Vertical Sync polarity */
+	u_char vl_bpix;		/* Bits per pixel */
+
+	/* Horizontal control register. Timing from data sheet */
+	ushort vl_hspw;		/* Horz sync pulse width */
+	ushort vl_hfpd;		/* Wait before of line */
+	ushort vl_hbpd;		/* Wait end of line */
+
+	/* Vertical control register. */
+	ushort	vl_vspw;	/* Vertical sync pulse width */
+	ushort	vl_vfpd;	/* Wait before of frame */
+	ushort	vl_vbpd;	/* Wait end of frame */
+	u_char  vl_swap_rb;
+	struct layer_par par[NUM_LAYERS];
+
+	unsigned int lcdc_id;
+	unsigned int init_delay;
+	unsigned int power_on_delay;
+	unsigned int reset_delay;
+	unsigned int interface_mode;
+	unsigned int lvds_format;
+	unsigned int lvds_ttl_en;
+	unsigned int cs_setup;
+	unsigned int wr_setup;
+	unsigned int logo_width;
+	unsigned int logo_height;
+	unsigned long logo_addr;
+	unsigned int logo_rgb_mode;
+	unsigned int resolution;
+	unsigned int real_freq;
+	unsigned int pixelrepeat;
+	unsigned int vmode;//interlace mode
+	unsigned int color_mode;
+	u16 refresh_mode;
+	unsigned int x_mirror;
+	unsigned int y_mirror;
+	unsigned int *dsp_lut;
+
+	/* parent clock name(MPLL, EPLL or VPLL) */
+	unsigned int pclk_name;
+	/* ratio value for source clock from parent clock. */
+	unsigned int sclk_div;
+
+	unsigned int dual_lcd_enabled;
+
+    	u_char screen_type;
+    	u_char lvds_ch_nr;
+	u_char dclk_inv;
+	unsigned short overscan;
+	unsigned short left;
+	unsigned short top;
+	unsigned short right;
+	unsigned short bottom;
+} vidinfo_t;
+
+void init_panel_info(vidinfo_t *vid);
+void rk_lcdc_set_par(struct fb_dsp_info *fb_info, vidinfo_t *vid);
+int rk_lcdc_load_screen(vidinfo_t *vid);
+int rk_lcdc_init(int lcdc_id);
+void get_rk_logo_info(vidinfo_t *vid);
+
 #else
 
 typedef struct vidinfo {
@@ -261,6 +385,13 @@ void	lcd_puts(const char *s);
 void	lcd_printf(const char *fmt, ...);
 void	lcd_clear(void);
 int	lcd_display_bitmap(ulong bmp_image, int x, int y);
+
+#ifdef CONFIG_ROCKCHIP
+int lcd_display_bitmap_center(ulong bmp_image);
+void *lcd_get_buffer(void);
+void lcd_enable_logo(bool enable);
+void lcd_enable_flip(bool enable);
+#endif
 
 /**
  * Get the width of the LCD in pixels
@@ -359,15 +490,7 @@ void lcd_sync(void);
 /************************************************************************/
 /* ** CONSOLE CONSTANTS							*/
 /************************************************************************/
-#if LCD_BPP == LCD_MONOCHROME
-
-/*
- * Simple black/white definitions
- */
-# define CONSOLE_COLOR_BLACK	0
-# define CONSOLE_COLOR_WHITE	1	/* Must remain last / highest	*/
-
-#elif LCD_BPP == LCD_COLOR8
+#if LCD_BPP == LCD_COLOR8
 
 /*
  * 8bpp color definitions
@@ -402,8 +525,8 @@ void lcd_sync(void);
 /*
  * 16bpp color definitions
  */
-# define CONSOLE_COLOR_BLACK	0x0000
-# define CONSOLE_COLOR_WHITE	0xffff	/* Must remain last / highest	*/
+#define CONSOLE_COLOR_BLACK	0x0000
+#define CONSOLE_COLOR_WHITE	0xffff	/* Must remain last / highest	*/
 
 #endif /* color definitions */
 

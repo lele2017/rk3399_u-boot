@@ -12,5 +12,6 @@ ifdef CONFIG_PS2KBD
 obj-y += keyboard.o pc_keyb.o
 obj-$(CONFIG_PS2MULT) += ps2mult.o ps2ser.o
 endif
+
 obj-y += input.o
 obj-$(CONFIG_OF_CONTROL) += key_matrix.o

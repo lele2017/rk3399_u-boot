@@ -351,7 +351,12 @@ void usbd_rcv_complete(struct usb_endpoint_instance *endpoint, int len, int urb_
 			/*rcv_urb->actual_length, rcv_urb->buffer_length); */
 
 			/* check the urb is ok, are we adding data less than the packetsize */
+#ifdef CONFIG_ROCKCHIP
+			//mod for large urb transfer.
+			if (!urb_bad) {
+#else
 			if (!urb_bad && (len <= endpoint->rcv_packetSize)) {
+#endif
 			  /*usbdbg("updating actual_length by %d\n",len); */
 
 				/* increment the received data size */
@@ -537,7 +542,7 @@ struct urb *usbd_alloc_urb (struct usb_device_instance *device,
 {
 	struct urb *urb;
 
-	if (!(urb = (struct urb *) malloc (sizeof (struct urb)))) {
+	if (!(urb = (struct urb *) memalign (ARCH_DMA_MINALIGN, sizeof (struct urb)))) {
 		usberr (" F A T A L:  malloc(%zu) FAILED!!!!",
 			sizeof (struct urb));
 		return NULL;
@@ -568,8 +573,6 @@ void usbd_dealloc_urb (struct urb *urb)
 	}
 }
 
-/* Event signaling functions ***************************************************** */
-
 /**
  * usbd_device_event - called to respond to various usb events
  * @device: pointer to struct device
@@ -577,7 +580,8 @@ void usbd_dealloc_urb (struct urb *urb)
  *
  * Used by a Bus driver to indicate an event.
  */
-void usbd_device_event_irq (struct usb_device_instance *device, usb_device_event_t event, int data)
+void usbd_device_event_irq (struct usb_device_instance *device,
+				 usb_device_event_t event, int data)
 {
 	usb_device_state_t state;
 
@@ -657,7 +661,7 @@ void usbd_device_event_irq (struct usb_device_instance *device, usb_device_event
 		usbdbg("event %d - not handled",event);
 		break;
 	}
-	debug("%s event: %d oldstate: %d newstate: %d status: %d address: %d",
+	debug("%s event: %d oldstate: %d newstate: %d status: %d address: %d \n",
 		device->name, event, state,
 		device->device_state, device->status, device->address);
 

@@ -8,6 +8,7 @@
  */
 
 #include <common.h>
+#include <inttypes.h>
 #include <stdio_dev.h>
 #include <linux/ctype.h>
 #include <linux/types.h>
@@ -289,6 +290,7 @@ int fdt_chosen(void *fdt)
 
 	str = getenv("bootargs");
 	if (str) {
+#ifndef CONFIG_ROCKCHIP
 		err = fdt_setprop(fdt, nodeoffset, "bootargs", str,
 				  strlen(str) + 1);
 		if (err < 0) {
@@ -296,6 +298,31 @@ int fdt_chosen(void *fdt)
 			       fdt_strerror(err));
 			return err;
 		}
+#else
+		const char *bootargs = NULL;
+		char buf[2048];
+
+		bootargs = fdt_getprop(fdt, nodeoffset, "bootargs", NULL);
+		if (bootargs != NULL) {
+			memset(buf, 0, sizeof(buf));
+			snprintf(buf, sizeof(buf), "%s %s", bootargs, str);
+			err = fdt_setprop(fdt, nodeoffset, "bootargs", buf,
+					  strlen(buf) + 1);
+			if (err < 0) {
+				printf("WARNING: could not set bootargs %s.\n",
+				       fdt_strerror(err));
+				return err;
+			}
+		} else {
+			err = fdt_setprop(fdt, nodeoffset, "bootargs", str,
+					  strlen(str) + 1);
+			if (err < 0) {
+				printf("WARNING: could not set bootargs %s.\n",
+				       fdt_strerror(err));
+				return err;
+			}
+		}
+#endif
 	}
 
 	return fdt_fixup_stdout(fdt, nodeoffset);
@@ -407,10 +434,14 @@ static int fdt_pack_reg(const void *fdt, void *buf, uint64_t *address,
 	return p - (char *)buf;
 }
 
+#ifndef CONFIG_ROCKCHIP
 #ifdef CONFIG_NR_DRAM_BANKS
 #define MEMORY_BANKS_MAX CONFIG_NR_DRAM_BANKS
 #else
 #define MEMORY_BANKS_MAX 4
+#endif
+#else
+#define MEMORY_BANKS_MAX CONFIG_RK_MAX_DRAM_BANKS
 #endif
 int fdt_fixup_memory_banks(void *blob, u64 start[], u64 size[], int banks)
 {
@@ -444,6 +475,9 @@ int fdt_fixup_memory_banks(void *blob, u64 start[], u64 size[], int banks)
 		return err;
 	}
 
+	if (!banks)
+		return 0;
+
 	len = fdt_pack_reg(blob, tmp, start, size, banks);
 
 	err = fdt_setprop(blob, nodeoffset, "reg", tmp, len);
@@ -459,6 +493,38 @@ int fdt_fixup_memory(void *blob, u64 start, u64 size)
 {
 	return fdt_fixup_memory_banks(blob, &start, &size, 1);
 }
+
+#ifdef CONFIG_ROCKCHIP
+int fdt_update_reserved_memory(void *blob, char *name, u64 start, u64 size)
+{
+	int nodeoffset, len, err;
+	u8 tmp[16]; /* Up to 64-bit address + 64-bit size */
+
+#if 0
+	/*name is rockchip_logo*/
+	nodeoffset = fdt_find_or_add_subnode(blob, 0, "reserved-memory");
+	if (nodeoffset < 0)
+		return nodeoffset;
+	printf("hjc>>reserved-memory>>%s, nodeoffset:%d\n", __func__, nodeoffset);
+	nodeoffset = fdt_find_or_add_subnode(blob, nodeoffset, name);
+	if (nodeoffset < 0)
+		return nodeoffset;
+#else
+	nodeoffset = fdt_node_offset_by_compatible(blob, 0, name);
+	if (nodeoffset < 0)
+		debug("Can't find nodeoffset: %d\n", nodeoffset);
+#endif
+	len = fdt_pack_reg(blob, tmp, &start, &size, 1);
+	err = fdt_setprop(blob, nodeoffset, "reg", tmp, len);
+	if (err < 0) {
+		printf("WARNING: could not set %s %s.\n",
+				"reg", fdt_strerror(err));
+		return err;
+	}
+
+	return nodeoffset;
+}
+#endif
 
 void fdt_fixup_ethernet(void *fdt)
 {
@@ -930,8 +996,6 @@ void fdt_del_node_and_alias(void *blob, const char *alias)
 	fdt_delprop(blob, off, alias);
 }
 
-#define PRu64	"%llx"
-
 /* Max address size we deal with */
 #define OF_MAX_ADDR_CELLS	4
 #define OF_BAD_ADDR	((u64)-1)
@@ -994,8 +1058,8 @@ static u64 of_bus_default_map(fdt32_t *addr, const fdt32_t *range,
 	s  = of_read_number(range + na + pna, ns);
 	da = of_read_number(addr, na);
 
-	debug("OF: default map, cp="PRu64", s="PRu64", da="PRu64"\n",
-	    cp, s, da);
+	debug("OF: default map, cp=%" PRIu64 ", s=%" PRIu64
+	      ", da=%" PRIu64 "\n", cp, s, da);
 
 	if (da < cp || da >= (cp + s))
 		return OF_BAD_ADDR;
@@ -1073,7 +1137,7 @@ static int of_translate_one(void * blob, int parent, struct of_bus *bus,
 
  finish:
 	of_dump_addr("OF: parent translation for:", addr, pna);
-	debug("OF: with offset: "PRu64"\n", offset);
+	debug("OF: with offset: %" PRIu64 "\n", offset);
 
 	/* Translate it into parent bus space */
 	return pbus->translate(addr, offset, pna);
@@ -1401,9 +1465,9 @@ int fdt_verify_alias_address(void *fdt, int anode, const char *alias, u64 addr)
 
 	dt_addr = fdt_translate_address(fdt, node, reg);
 	if (addr != dt_addr) {
-		printf("Warning: U-Boot configured device %s at address %llx,\n"
-		       " but the device tree has it address %llx.\n",
-		       alias, addr, dt_addr);
+		printf("Warning: U-Boot configured device %s at address %"
+		       PRIx64 ",\n but the device tree has it address %"
+		       PRIx64 ".\n", alias, addr, dt_addr);
 		return 0;
 	}
 

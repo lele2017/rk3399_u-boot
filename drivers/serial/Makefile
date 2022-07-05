@@ -12,6 +12,7 @@ obj-y += serial.o
 obj-$(CONFIG_SYS_NS16550_SERIAL) += serial_ns16550.o
 endif
 
+obj-$(CONFIG_RK_UART) += serial_rk.o
 obj-$(CONFIG_ALTERA_UART) += altera_uart.o
 obj-$(CONFIG_ALTERA_JTAG_UART) += altera_jtag_uart.o
 obj-$(CONFIG_ARM_DCC) += arm_dcc.o

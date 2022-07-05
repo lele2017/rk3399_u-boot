@@ -16,7 +16,15 @@ struct battery {
 	unsigned int voltage_uV;
 
 	unsigned int state;
+	unsigned int isexistbat;
 };
 
 int power_bat_init(unsigned char bus);
+int get_power_bat_status(struct battery *batt_status);
+
+//return 1, if power low.
+int is_power_low(void);
+//return 1, if power extreme low.
+int is_power_extreme_low(void);
+
 #endif /* __POWER_BATTERY_H_ */

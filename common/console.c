@@ -7,6 +7,7 @@
 
 #include <common.h>
 #include <stdarg.h>
+#include <iomux.h>
 #include <malloc.h>
 #include <os.h>
 #include <serial.h>
@@ -124,12 +125,12 @@ static int console_setfile(int file, struct stdio_dev * dev)
 		 */
 		switch (file) {
 		case stdin:
-			gd->jt[XF_getc] = dev->getc;
-			gd->jt[XF_tstc] = dev->tstc;
+			gd->jt[XF_getc] = getc;
+			gd->jt[XF_tstc] = tstc;
 			break;
 		case stdout:
-			gd->jt[XF_putc] = dev->putc;
-			gd->jt[XF_puts] = dev->puts;
+			gd->jt[XF_putc] = putc;
+			gd->jt[XF_puts] = puts;
 			gd->jt[XF_printf] = printf;
 			break;
 		}
@@ -621,7 +622,7 @@ inline void dbg(const char *fmt, ...)
 
 }
 #else
-inline void dbg(const char *fmt, ...)
+static inline void dbg(const char *fmt, ...)
 {
 }
 #endif
@@ -686,6 +687,7 @@ int console_init_f(void)
 void stdio_print_current_devices(void)
 {
 	/* Print information */
+#ifndef CONFIG_ROCKCHIP
 	puts("In:    ");
 	if (stdio_devices[stdin] == NULL) {
 		puts("No input devices available!\n");
@@ -706,6 +708,7 @@ void stdio_print_current_devices(void)
 	} else {
 		printf ("%s\n", stdio_devices[stderr]->name);
 	}
+#endif
 }
 
 #ifdef CONFIG_SYS_CONSOLE_IS_IN_ENV

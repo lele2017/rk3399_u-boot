@@ -95,7 +95,7 @@ static int do_bmp_info(cmd_tbl_t * cmdtp, int flag, int argc, char * const argv[
 	case 1:		/* use load_addr as default address */
 		addr = load_addr;
 		break;
-	case 2:		/* use argument */
+    case 2:		/* use argument */
 		addr = simple_strtoul(argv[1], NULL, 16);
 		break;
 	default:

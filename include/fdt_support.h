@@ -40,8 +40,34 @@ void do_fixup_by_compat(void *fdt, const char *compat,
 			const char *prop, const void *val, int len, int create);
 void do_fixup_by_compat_u32(void *fdt, const char *compat,
 			    const char *prop, u32 val, int create);
+/**
+ * Setup the memory node in the DT. Creates one if none was existing before.
+ * Calls fdt_fixup_memory_banks() to populate a single reg pair covering the
+ * whole memory.
+ *
+ * @param blob		FDT blob to update
+ * @param start		Begin of DRAM mapping in physical memory
+ * @param size		Size of the single memory bank
+ * @return 0 if ok, or -1 or -FDT_ERR_... on error
+ */
 int fdt_fixup_memory(void *blob, u64 start, u64 size);
+
+/**
+ * Fill the DT memory node with multiple memory banks.
+ * Creates the node if none was existing before.
+ * If banks is 0, it will not touch the existing reg property. This allows
+ * boards to not mess with the existing DT setup, which may have been
+ * filled in properly before.
+ *
+ * @param blob		FDT blob to update
+ * @param start		Array of size <banks> to hold the start addresses.
+ * @param size		Array of size <banks> to hold the size of each region.
+ * @param banks		Number of memory banks to create. If 0, the reg
+ *			property will be left untouched.
+ * @return 0 if ok, or -1 or -FDT_ERR_... on error
+ */
 int fdt_fixup_memory_banks(void *blob, u64 start[], u64 size[], int banks);
+
 void fdt_fixup_ethernet(void *fdt);
 int fdt_find_and_setprop(void *fdt, const char *node, const char *prop,
 			 const void *val, int len, int create);
@@ -105,6 +131,9 @@ enum fdt_status {
 };
 int fdt_set_node_status(void *fdt, int nodeoffset,
 			enum fdt_status status, unsigned int error_code);
+#ifdef CONFIG_ROCKCHIP
+int fdt_update_reserved_memory(void *blob, char *name, u64 start, u64 size);
+#endif
 static inline int fdt_status_okay(void *fdt, int nodeoffset)
 {
 	return fdt_set_node_status(fdt, nodeoffset, FDT_STATUS_OKAY, 0);
@@ -144,6 +173,8 @@ static inline u64 of_read_number(const fdt32_t *cell, int size)
 
 void of_bus_default_count_cells(void *blob, int parentoffset,
 					int *addrc, int *sizec);
+int ft_verify_fdt(void *fdt);
+int arch_fixup_memory_node(void *blob);
 
 #endif /* ifdef CONFIG_OF_LIBFDT */
 

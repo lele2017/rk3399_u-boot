@@ -30,5 +30,9 @@ config CMD_GO
 	default y
 	help
 	  Start an application at a given address.
+config CMD_RUN
+	bool "Enable run command"
+	default y
+	help
 
 endmenu

@@ -39,9 +39,14 @@
 #include <post.h>
 #include <logbuff.h>
 #include <asm/sections.h>
+#include <linux/sizes.h>
 
 #ifdef CONFIG_BITBANGMII
 #include <miiphy.h>
+#endif
+
+#ifdef CONFIG_ROCKCHIP
+#include <asm/arch/rkplat.h>
 #endif
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -63,25 +68,15 @@ extern void dataflash_print_info(void);
  ************************************************************************
  * May be supplied by boards if desired
  */
-inline void __coloured_LED_init(void) {}
-void coloured_LED_init(void)
-	__attribute__((weak, alias("__coloured_LED_init")));
-inline void __red_led_on(void) {}
-void red_led_on(void) __attribute__((weak, alias("__red_led_on")));
-inline void __red_led_off(void) {}
-void red_led_off(void) __attribute__((weak, alias("__red_led_off")));
-inline void __green_led_on(void) {}
-void green_led_on(void) __attribute__((weak, alias("__green_led_on")));
-inline void __green_led_off(void) {}
-void green_led_off(void) __attribute__((weak, alias("__green_led_off")));
-inline void __yellow_led_on(void) {}
-void yellow_led_on(void) __attribute__((weak, alias("__yellow_led_on")));
-inline void __yellow_led_off(void) {}
-void yellow_led_off(void) __attribute__((weak, alias("__yellow_led_off")));
-inline void __blue_led_on(void) {}
-void blue_led_on(void) __attribute__((weak, alias("__blue_led_on")));
-inline void __blue_led_off(void) {}
-void blue_led_off(void) __attribute__((weak, alias("__blue_led_off")));
+__weak void coloured_LED_init(void) {}
+__weak void red_led_on(void) {}
+__weak void red_led_off(void) {}
+__weak void green_led_on(void) {}
+__weak void green_led_off(void) {}
+__weak void yellow_led_on(void) {}
+__weak void yellow_led_off(void) {}
+__weak void blue_led_on(void) {}
+__weak void blue_led_off(void) {}
 
 /*
  ************************************************************************
@@ -198,27 +193,21 @@ static int arm_pci_init(void)
  */
 typedef int (init_fnc_t) (void);
 
-void __dram_init_banksize(void)
+__weak void dram_init_banksize(void)
 {
 	gd->bd->bi_dram[0].start = CONFIG_SYS_SDRAM_BASE;
 	gd->bd->bi_dram[0].size =  gd->ram_size;
 }
-void dram_init_banksize(void)
-	__attribute__((weak, alias("__dram_init_banksize")));
 
-int __arch_cpu_init(void)
+__weak int arch_cpu_init(void)
 {
 	return 0;
 }
-int arch_cpu_init(void)
-	__attribute__((weak, alias("__arch_cpu_init")));
 
-int __power_init_board(void)
+__weak int power_init_board(void)
 {
 	return 0;
 }
-int power_init_board(void)
-	__attribute__((weak, alias("__power_init_board")));
 
 	/* Record the board_init_f() bootstage (after arch_cpu_init()) */
 static int mark_bootstage(void)
@@ -292,7 +281,7 @@ void board_init_f(ulong bootflag)
 		}
 	}
 
-#ifdef CONFIG_OF_CONTROL
+#if defined(CONFIG_OF_CONTROL)
 	/* For now, put this check after the console is ready */
 	if (fdtdec_prepare_fdt()) {
 		panic("** CONFIG_OF_CONTROL defined but no FDT - please see "
@@ -355,15 +344,67 @@ void board_init_f(ulong bootflag)
 	addr &= ~(4096 - 1);
 	debug("Top of RAM usable for U-Boot at: %08lx\n", addr);
 
-#ifdef CONFIG_LCD
+#if defined(CONFIG_LCD) || defined(CONFIG_ROCKCHIP_DISPLAY)
+
+	/* if defind CONFIG_RK_FB_SIZE, set fb base at the end of ddr address */
+#if defined(CONFIG_ROCKCHIP) && defined(CONFIG_RK_FB_DDREND)
+	/* using ddr end address - CONFIG_RK_LCD_SIZE - SZ_4M, reserve 4M for 1.5G or 3G size ddr used */
+	gd->fb_base = (gd->arch.ddr_end - CONFIG_RK_LCD_SIZE - SZ_4M);
+	debug("LCD base at ddr end, fb base = %08lx, size = %08lx\n", gd->fb_base, CONFIG_RK_FB_SIZE);
+#else
 #ifdef CONFIG_FB_ADDR
 	gd->fb_base = CONFIG_FB_ADDR;
 #else
 	/* reserve memory for LCD display (always full pages) */
-	addr = lcd_setmem(addr);
-	gd->fb_base = addr;
+	gd->fb_base = lcd_setmem(addr);
+	debug("Reserving %ldk for fb buffers at %08lx\n", (addr - gd->fb_base) >> 10, gd->fb_base);
+	addr = gd->fb_base;
 #endif /* CONFIG_FB_ADDR */
+#endif /* CONFIG_RK_FB_DDREND */
+
 #endif /* CONFIG_LCD */
+
+#ifdef CONFIG_ROCKCHIP
+	/* round down to next 4 kB limit */
+	addr &= ~(4096 - 1);
+	/* reserve rk global buffers */
+	addr -= CONFIG_RK_GLOBAL_BUFFER_SIZE;
+	gd->arch.rk_global_buf_addr = addr;
+	debug("Reserving %dk for rk global buffer at %08lx\n",
+			CONFIG_RK_GLOBAL_BUFFER_SIZE >> 10, addr);
+
+	/* reserve rk boot buffers */
+	addr &= ~(4096 - 1);
+	addr -= CONFIG_RK_BOOT_BUFFER_SIZE;
+	gd->arch.rk_boot_buf_addr = addr;
+
+	debug("Reserving %dk for rk boot buffer at %08lx\n",
+			CONFIG_RK_BOOT_BUFFER_SIZE >> 10, gd->arch.rk_boot_buf_addr);
+#endif
+
+#ifdef CONFIG_CMD_FASTBOOT
+	/* reserve fastboot transfer buffer */
+#ifdef CONFIG_ROCKCHIP
+	/* using rk boot buffer for fbt buffer */
+	gd->arch.fastboot_buf_addr = gd->arch.rk_boot_buf_addr;
+	debug("Using rk boot buffer as Fastboot transfer buffer.\n");
+#else
+	addr &= ~(4096 - 1);
+	addr -= CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE;
+	gd->arch.fastboot_buf_addr = addr;
+	debug("Reserving %dk for fastboot transfer buffer at %08lx\n",
+			CONFIG_FASTBOOT_TRANSFER_BUFFER_SIZE >> 10, addr);
+#endif
+
+#ifndef CONFIG_FASTBOOT_LOG_SIZE
+#define CONFIG_FASTBOOT_LOG_SIZE (SZ_2M)
+#endif
+	/* reserve fastboot log buffer */
+	addr -= CONFIG_FASTBOOT_LOG_SIZE;
+	gd->arch.fastboot_log_buf_addr = addr;
+	debug("Reserving %dk for fastboot log buffer at %08lx\n",
+			CONFIG_FASTBOOT_LOG_SIZE >> 10, addr);
+#endif //CONFIG_CMD_FASTBOOT
 
 	/*
 	 * reserve memory for U-Boot code, data & bss
@@ -439,6 +480,8 @@ void board_init_f(ulong bootflag)
 #endif
 
 	debug("New Stack Pointer is: %08lx\n", addr_sp);
+    debug("total reserving memory(except stack) is :%ldm\n",
+			((CONFIG_SYS_SDRAM_BASE + gd->ram_size - addr_sp) >> 20) + 1);
 
 #ifdef CONFIG_POST
 	post_bootmode_init();
@@ -534,7 +577,11 @@ void board_init_r(gd_t *id, ulong dest_addr)
 #endif
 	serial_initialize();
 
+#ifndef CONFIG_SKIP_RELOCATE_UBOOT
 	debug("Now running in RAM - U-Boot at: %08lx\n", dest_addr);
+#else
+	debug("Now running in RAM - U-Boot at: %08lx\n", CONFIG_SYS_SDRAM_BASE);
+#endif
 
 #ifdef CONFIG_LOGBUFFER
 	logbuff_init_ptrs();
@@ -593,6 +640,10 @@ void board_init_r(gd_t *id, ulong dest_addr)
 	mmc_initialize(gd->bd);
 #endif
 
+#ifdef CONFIG_ROCKCHIP
+	board_storage_init();
+#endif
+
 #ifdef CONFIG_CMD_SCSI
 	puts("SCSI:  ");
 	scsi_init();
@@ -642,10 +693,12 @@ void board_init_r(gd_t *id, ulong dest_addr)
 	misc_init_r();
 #endif
 
+#ifndef CONFIG_ROCKCHIP
 	 /* set up exceptions */
 	interrupt_init();
 	/* enable exceptions */
 	enable_interrupts();
+#endif
 
 	/* Initialize from environment */
 	load_addr = getenv_ulong("loadaddr", 16, load_addr);

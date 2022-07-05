@@ -36,4 +36,5 @@ obj-$(CONFIG_XILINX_GPIO)	+= xilinx_gpio.o
 obj-$(CONFIG_ADI_GPIO2)	+= adi_gpio2.o
 obj-$(CONFIG_TCA642X)		+= tca642x.o
 oby-$(CONFIG_SX151X)		+= sx151x.o
+obj-$(CONFIG_RK_GPIO)		+= rk_gpio.o
 obj-$(CONFIG_SUNXI_GPIO)	+= sunxi_gpio.o

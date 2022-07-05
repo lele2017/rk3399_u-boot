@@ -40,6 +40,27 @@ struct fdt_memory {
 	fdt_addr_t end;
 };
 
+/*
+ * Information about a resource. start is the first address of the resource
+ * and end is the last address (inclusive). The length of the resource will
+ * be equal to: end - start + 1.
+ */
+struct fdt_resource {
+	fdt_addr_t start;
+	fdt_addr_t end;
+};
+
+/**
+ * Compute the size of a resource.
+ *
+ * @param res	the resource to operate on
+ * @return the size of the resource
+ */
+static inline fdt_size_t fdt_resource_size(const struct fdt_resource *res)
+{
+	return res->end - res->start + 1;
+}
+
 /**
  * Compat types that we know about and for which we might have drivers.
  * Each is named COMPAT_<dir>_<filename> where <dir> is the directory
@@ -90,6 +111,14 @@ enum fdt_compat_id {
 	COMPAT_INFINEON_SLB9635_TPM,	/* Infineon SLB9635 TPM */
 	COMPAT_INFINEON_SLB9645_TPM,	/* Infineon SLB9645 TPM */
 	COMPAT_SAMSUNG_EXYNOS5_I2C,	/* Exynos5 High Speed I2C Controller */
+	COMPAT_ROCKCHIP_DSIHOST,	/*RockChip DSI host Controller*/
+	COMPAT_ROCKCHIP_MIPI_INIT,	/*RockChip MIPI init*/
+	COMPAT_ROCKCHIP_MIPI_PWR,	/*RockChip MIPI pwr*/
+	COMPAT_ROCKCHIP_MIPI_SONCMDS,	/*RockChip MIPI screen on cmds*/
+	COMPAT_ROCKCHIP_MIPI_ONCMDS,	/*RockChip MIPI screen on cmd*/
+	COMPAT_ROCKCHIP_MIPI_LCD_DT,	/*RockChip MIPI screen display timing */
+	COMPAT_ROCKCHIP_MIPI_LCD_RST,   /*RockChip MIPI screen rst pin */
+	COMPAT_ROCKCHIP_MIPI_LCD_EN,    /*RockChip MIPI screen en pin */
 	COMPAT_SANDBOX_HOST_EMULATION,	/* Sandbox emulation of a function */
 	COMPAT_SANDBOX_LCD_SDL,		/* Sandbox LCD emulation with SDL */
 	COMPAT_TI_TPS65090,		/* Texas Instrument TPS65090 */
@@ -198,10 +227,90 @@ int fdtdec_next_compatible(const void *blob, int node,
 int fdtdec_next_compatible_subnode(const void *blob, int node,
 		enum fdt_compat_id id, int *depthp);
 
-/**
- * Look up an address property in a node and return it as an address.
- * The property must hold either one address with no trailing data or
- * one address with a length. This is only tested on 32-bit machines.
+/*
+ * Look up an address property in a node and return the parsed address, and
+ * optionally the parsed size.
+ *
+ * This variant assumes a known and fixed number of cells are used to
+ * represent the address and size.
+ *
+ * You probably don't want to use this function directly except to parse
+ * non-standard properties, and never to parse the "reg" property. Instead,
+ * use one of the "auto" variants below, which automatically honor the
+ * #address-cells and #size-cells properties in the parent node.
+ *
+ * @param blob	FDT blob
+ * @param node	node to examine
+ * @param prop_name	name of property to find
+ * @param index	which address to retrieve from a list of addresses. Often 0.
+ * @param na	the number of cells used to represent an address
+ * @param ns	the number of cells used to represent a size
+ * @param sizep	a pointer to store the size into. Use NULL if not required
+ * @return address, if found, or FDT_ADDR_T_NONE if not
+ */
+fdt_addr_t fdtdec_get_addr_size_fixed(const void *blob, int node,
+		const char *prop_name, int index, int na, int ns,
+		fdt_size_t *sizep);
+
+/*
+ * Look up an address property in a node and return the parsed address, and
+ * optionally the parsed size.
+ *
+ * This variant automatically determines the number of cells used to represent
+ * the address and size by parsing the provided parent node's #address-cells
+ * and #size-cells properties.
+ *
+ * @param blob	FDT blob
+ * @param parent	parent node of @node
+ * @param node	node to examine
+ * @param prop_name	name of property to find
+ * @param index	which address to retrieve from a list of addresses. Often 0.
+ * @param sizep	a pointer to store the size into. Use NULL if not required
+ * @return address, if found, or FDT_ADDR_T_NONE if not
+ */
+fdt_addr_t fdtdec_get_addr_size_auto_parent(const void *blob, int parent,
+		int node, const char *prop_name, int index, fdt_size_t *sizep);
+
+/*
+ * Look up an address property in a node and return the parsed address, and
+ * optionally the parsed size.
+ *
+ * This variant automatically determines the number of cells used to represent
+ * the address and size by parsing the parent node's #address-cells
+ * and #size-cells properties. The parent node is automatically found.
+ *
+ * The automatic parent lookup implemented by this function is slow.
+ * Consequently, fdtdec_get_addr_size_auto_parent() should be used where
+ * possible.
+ *
+ * @param blob	FDT blob
+ * @param parent	parent node of @node
+ * @param node	node to examine
+ * @param prop_name	name of property to find
+ * @param index	which address to retrieve from a list of addresses. Often 0.
+ * @param sizep	a pointer to store the size into. Use NULL if not required
+ * @return address, if found, or FDT_ADDR_T_NONE if not
+ */
+fdt_addr_t fdtdec_get_addr_size_auto_noparent(const void *blob, int node,
+		const char *prop_name, int index, fdt_size_t *sizep);
+
+/*
+ * Look up an address property in a node and return the parsed address.
+ *
+ * This variant hard-codes the number of cells used to represent the address
+ * and size based on sizeof(fdt_addr_t) and sizeof(fdt_size_t). It also
+ * always returns the first address value in the property (index 0).
+ *
+ * Use of this function is not recommended due to the hard-coding of cell
+ * counts. There is no programmatic validation that these hard-coded values
+ * actually match the device tree content in any way at all. This assumption
+ * can be satisfied by manually ensuring CONFIG_PHYS_64BIT is appropriately
+ * set in the U-Boot build and exercising strict control over DT content to
+ * ensure use of matching #address-cells/#size-cells properties. However, this
+ * approach is error-prone; those familiar with DT will not expect the
+ * assumption to exist, and could easily invalidate it. If the assumption is
+ * invalidated, this function will not report the issue, and debugging will
+ * be required. Instead, use fdtdec_get_addr_size_auto_parent().
  *
  * @param blob	FDT blob
  * @param node	node to examine
@@ -211,14 +320,29 @@ int fdtdec_next_compatible_subnode(const void *blob, int node,
 fdt_addr_t fdtdec_get_addr(const void *blob, int node,
 		const char *prop_name);
 
-/**
- * Look up an address property in a node and return it as an address.
- * The property must hold one address with a length. This is only tested
- * on 32-bit machines.
+/*
+ * Look up an address property in a node and return the parsed address, and
+ * optionally the parsed size.
+ *
+ * This variant hard-codes the number of cells used to represent the address
+ * and size based on sizeof(fdt_addr_t) and sizeof(fdt_size_t). It also
+ * always returns the first address value in the property (index 0).
+ *
+ * Use of this function is not recommended due to the hard-coding of cell
+ * counts. There is no programmatic validation that these hard-coded values
+ * actually match the device tree content in any way at all. This assumption
+ * can be satisfied by manually ensuring CONFIG_PHYS_64BIT is appropriately
+ * set in the U-Boot build and exercising strict control over DT content to
+ * ensure use of matching #address-cells/#size-cells properties. However, this
+ * approach is error-prone; those familiar with DT will not expect the
+ * assumption to exist, and could easily invalidate it. If the assumption is
+ * invalidated, this function will not report the issue, and debugging will
+ * be required. Instead, use fdtdec_get_addr_size_auto_parent().
  *
  * @param blob	FDT blob
  * @param node	node to examine
  * @param prop_name	name of property to find
+ * @param sizep	a pointer to store the size into. Use NULL if not required
  * @return address, if found, or FDT_ADDR_T_NONE if not
  */
 fdt_addr_t fdtdec_get_addr_size(const void *blob, int node,
@@ -237,6 +361,17 @@ fdt_addr_t fdtdec_get_addr_size(const void *blob, int node,
  */
 s32 fdtdec_get_int(const void *blob, int node, const char *prop_name,
 		s32 default_val);
+
+/**
+ * Get a variable-sized number from a property
+ *
+ * This reads a number from one or more cells.
+ *
+ * @param ptr	Pointer to property
+ * @param cells	Number of cells containing the number
+ * @return the value in the cells
+ */
+u64 fdtdec_get_number(const fdt32_t *ptr, unsigned int cells);
 
 /**
  * Look up a 64-bit integer property in a node and return it. The property
@@ -423,6 +558,22 @@ int fdtdec_get_int_array(const void *blob, int node, const char *prop_name,
 		u32 *array, int count);
 
 /**
+ * Look up a property in a node and return its contents in an integer
+ * array of given length. The property must exist but may have less data that
+ * expected (4*count bytes). It may have more, but this will be ignored.
+ *
+ * @param blob		FDT blob
+ * @param node		node to examine
+ * @param prop_name	name of property to find
+ * @param array		array to fill with data
+ * @param count		number of array elements
+ * @return number of array elements if ok, or -FDT_ERR_NOTFOUND if the
+ *		property is not found
+ */
+int fdtdec_get_int_array_count(const void *blob, int node,
+			       const char *prop_name, u32 *array, int count);
+
+/**
  * Look up a property in a node and return a pointer to its contents as a
  * unsigned int array of given length. The property must have at least enough
  * data for the array ('count' cells). It may have more, but this will be
@@ -573,17 +724,33 @@ const u8 *fdtdec_locate_byte_array(const void *blob, int node,
  * @param blob		FDT blob
  * @param node		node to examine
  * @param prop_name	name of property to find
- * @param ptrp		returns pointer to region, or NULL if no address
- * @param size		returns size of region
- * @return 0 if ok, -1 on error (propery not found)
+ * @param basep		Returns base address of region
+ * @param size		Returns size of region
+ * @return 0 if ok, -1 on error (property not found)
  */
-int fdtdec_decode_region(const void *blob, int node,
-		const char *prop_name, void **ptrp, size_t *size);
+int fdtdec_decode_region(const void *blob, int node, const char *prop_name,
+			 fdt_addr_t *basep, fdt_size_t *sizep);
+
+enum fmap_compress_t {
+	FMAP_COMPRESS_NONE,
+	FMAP_COMPRESS_LZO,
+};
+
+enum fmap_hash_t {
+	FMAP_HASH_NONE,
+	FMAP_HASH_SHA1,
+	FMAP_HASH_SHA256,
+};
 
 /* A flash map entry, containing an offset and length */
 struct fmap_entry {
 	uint32_t offset;
 	uint32_t length;
+	uint32_t used;			/* Number of bytes used in region */
+	enum fmap_compress_t compress_algo;	/* Compression type */
+	enum fmap_hash_t hash_algo;		/* Hash algorithm */
+	const uint8_t *hash;			/* Hash value */
+	int hash_size;				/* Hash size */
 };
 
 /**
@@ -597,4 +764,137 @@ struct fmap_entry {
  */
 int fdtdec_read_fmap_entry(const void *blob, int node, const char *name,
 			   struct fmap_entry *entry);
+
+/**
+ * Obtain an indexed resource from a device property.
+ *
+ * @param fdt		FDT blob
+ * @param node		node to examine
+ * @param property	name of the property to parse
+ * @param index		index of the resource to retrieve
+ * @param res		returns the resource
+ * @return 0 if ok, negative on error
+ */
+int fdt_get_resource(const void *fdt, int node, const char *property,
+		     unsigned int index, struct fdt_resource *res);
+
+/**
+ * Obtain a named resource from a device property.
+ *
+ * Look up the index of the name in a list of strings and return the resource
+ * at that index.
+ *
+ * @param fdt		FDT blob
+ * @param node		node to examine
+ * @param property	name of the property to parse
+ * @param prop_names	name of the property containing the list of names
+ * @param name		the name of the entry to look up
+ * @param res		returns the resource
+ */
+int fdt_get_named_resource(const void *fdt, int node, const char *property,
+			   const char *prop_names, const char *name,
+			   struct fdt_resource *res);
+
+/**
+ * Look at the reg property of a device node that represents a PCI device
+ * and parse the bus, device and function number from it.
+ *
+ * @param fdt		FDT blob
+ * @param node		node to examine
+ * @param bdf		returns bus, device, function triplet
+ * @return 0 if ok, negative on error
+ */
+int fdtdec_pci_get_bdf(const void *fdt, int node, int *bdf);
+
+/**
+ * Decode a named region within a memory bank of a given type.
+ *
+ * This function handles selection of a memory region. The region is
+ * specified as an offset/size within a particular type of memory.
+ *
+ * The properties used are:
+ *
+ *	<mem_type>-memory<suffix> for the name of the memory bank
+ *	<mem_type>-offset<suffix> for the offset in that bank
+ *
+ * The property value must have an offset and a size. The function checks
+ * that the region is entirely within the memory bank.5
+ *
+ * @param blob		FDT blob
+ * @param node		Node containing the properties (-1 for /config)
+ * @param mem_type	Type of memory to use, which is a name, such as
+ *			"u-boot" or "kernel".
+ * @param suffix	String to append to the memory/offset
+ *			property names
+ * @param basep		Returns base of region
+ * @param sizep		Returns size of region
+ * @return 0 if OK, -ive on error
+ */
+int fdtdec_decode_memory_region(const void *blob, int node,
+				const char *mem_type, const char *suffix,
+				fdt_addr_t *basep, fdt_size_t *sizep);
+
+/* Display timings from linux include/video/display_timing.h */
+enum display_flags {
+	DISPLAY_FLAGS_HSYNC_LOW		= 1 << 0,
+	DISPLAY_FLAGS_HSYNC_HIGH	= 1 << 1,
+	DISPLAY_FLAGS_VSYNC_LOW		= 1 << 2,
+	DISPLAY_FLAGS_VSYNC_HIGH	= 1 << 3,
+
+	/* data enable flag */
+	DISPLAY_FLAGS_DE_LOW		= 1 << 4,
+	DISPLAY_FLAGS_DE_HIGH		= 1 << 5,
+	/* drive data on pos. edge */
+	DISPLAY_FLAGS_PIXDATA_POSEDGE	= 1 << 6,
+	/* drive data on neg. edge */
+	DISPLAY_FLAGS_PIXDATA_NEGEDGE	= 1 << 7,
+	DISPLAY_FLAGS_INTERLACED	= 1 << 8,
+	DISPLAY_FLAGS_DOUBLESCAN	= 1 << 9,
+	DISPLAY_FLAGS_DOUBLECLK		= 1 << 10,
+};
+
+/*
+ * A single signal can be specified via a range of minimal and maximal values
+ * with a typical value, that lies somewhere inbetween.
+ */
+struct timing_entry {
+	u32 min;
+	u32 typ;
+	u32 max;
+};
+
+/*
+ * Single "mode" entry. This describes one set of signal timings a display can
+ * have in one setting. This struct can later be converted to struct videomode
+ * (see include/video/videomode.h). As each timing_entry can be defined as a
+ * range, one struct display_timing may become multiple struct videomodes.
+ *
+ * Example: hsync active high, vsync active low
+ *
+ *			    Active Video
+ * Video  __________________XXXXXXXXXXX__________________
+ *	  |<-sync->|<-back->|<-active->|<- front ->|<- sync..
+ *	  |	   |  porch |	       |   porch   |
+ *
+ * HSync _|¯¯¯¯¯¯¯¯|_______________________________|¯¯¯
+ *
+ * VSync ¯|________|¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯|___
+ */
+struct display_timing {
+	struct timing_entry pixelclock;
+
+	struct timing_entry hactive;		/* hor. active video */
+	struct timing_entry hfront_porch;	/* hor. front porch */
+	struct timing_entry hback_porch;	/* hor. back porch */
+	struct timing_entry hsync_len;		/* hor. sync len */
+
+	struct timing_entry vactive;		/* ver. active video */
+	struct timing_entry vfront_porch;	/* ver. front porch */
+	struct timing_entry vback_porch;	/* ver. back porch */
+	struct timing_entry vsync_len;		/* ver. sync len */
+
+	enum display_flags flags;		/* display flags */
+	bool hdmi_monitor;			/* is hdmi monitor? */
+};
+
 #endif

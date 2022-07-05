@@ -41,6 +41,32 @@ obj-$(CONFIG_VIDEO_SM501) += sm501.o
 obj-$(CONFIG_VIDEO_SMI_LYNXEM) += smiLynxEM.o videomodes.o
 obj-$(CONFIG_VIDEO_TEGRA) += tegra.o
 obj-$(CONFIG_VIDEO_VCXK) += bus_vcxk.o
+obj-$(CONFIG_ROCKCHIP_DISPLAY) += drm/ \
+			rockchip_display.o rockchip_crtc.o \
+			rockchip_connector.o bmp_helper.o rockchip_panel.o \
+			rockchip_phy.o
+obj-$(CONFIG_ROCKCHIP_VOP) += rockchip_vop.o rockchip_vop_reg.o
+obj-$(CONFIG_ROCKCHIP_MIPI_DSI)	+= rockchip_mipi_dsi.o
+obj-$(CONFIG_ROCKCHIP_DW_MIPI_DSI) += rockchip-dw-mipi-dsi.o rockchip-inno-mipi-dphy.o
+obj-$(CONFIG_ROCKCHIP_ANALOGIX_DP) += rockchip_analogix_dp.o rockchip_analogix_dp_reg.o
+obj-$(CONFIG_ROCKCHIP_LVDS) += rockchip_lvds.o
+obj-$(CONFIG_ROCKCHIP_PANEL) += panel_simple.o rockchip_dsi_panel.o
 obj-$(CONFIG_FORMIKE) += formike.o
+obj-$(CONFIG_RK_FB) += rockchip_fb.o
+obj-$(CONFIG_RK32_FB) +=  rk32_lcdc.o rk32_dp.o rk32_dp_reg.o
+obj-$(CONFIG_RK3036_FB) +=  rk3036_lcdc.o
+obj-$(CONFIG_RK33_FB) +=  rk3368_lcdc.o rk31xx_lvds.o rk32_dp.o rk32_dp_reg.o
+obj-$(CONFIG_RK322X_FB) += rk322x_lcdc.o
+obj-$(CONFIG_RK_VOP_FULL_FB) += rk_vop_full.o
+obj-$(CONFIG_RK3399_EDP) += rk32_dp.o rk32_dp_reg.o
+obj-$(CONFIG_RK_HDMI) += rk_hdmi.o
+obj-$(CONFIG_RK_HDMIV2) +=  rk32_hdmi.o
+obj-$(CONFIG_RK3036_HDMI) +=  rk3036_hdmi.o
+obj-$(CONFIG_RK3036_TVE) += rk3036_tve.o
+obj-$(CONFIG_RK1000_TVE) += rk1000_tve.o
+obj-$(CONFIG_GM7122_TVE) += gm7122_tve.o
+obj-$(CONFIG_RK_FB) +=  screen/
+obj-$(CONFIG_RK_FB) +=  transmitter/
+obj-$(CONFIG_RK_PWM_BL) +=  backlight/
 obj-$(CONFIG_AM335X_LCD) += am335x-fb.o
 obj-$(CONFIG_VIDEO_PARADE) += parade.o

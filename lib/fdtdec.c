@@ -12,6 +12,9 @@
 #include <linux/ctype.h>
 
 #include <asm/gpio.h>
+#ifdef CONFIG_ROCKCHIP
+#include <asm/arch/rkplat.h>
+#endif
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -66,6 +69,16 @@ static const char * const compat_names[COMPAT_COUNT] = {
 	COMPAT(INFINEON_SLB9635_TPM, "infineon,slb9635-tpm"),
 	COMPAT(INFINEON_SLB9645_TPM, "infineon,slb9645-tpm"),
 	COMPAT(SAMSUNG_EXYNOS5_I2C, "samsung,exynos5-hsi2c"),
+#ifdef CONFIG_ROCKCHIP
+	COMPAT(ROCKCHIP_DSIHOST, "rockchip,rk32-dsi"),
+	COMPAT(ROCKCHIP_MIPI_INIT, "rockchip,mipi_dsi_init"),
+	COMPAT(ROCKCHIP_MIPI_PWR, "rockchip,mipi_power_ctr"),
+	COMPAT(ROCKCHIP_MIPI_SONCMDS, "rockchip,screen-on-cmds"),
+	COMPAT(ROCKCHIP_MIPI_ONCMDS, "rockchip,on-cmds"),
+	COMPAT(ROCKCHIP_MIPI_LCD_DT, "rockchip,display-timings"),
+	COMPAT(ROCKCHIP_MIPI_LCD_RST, "rockchip,lcd_rst"),
+	COMPAT(ROCKCHIP_MIPI_LCD_EN, "rockchip,lcd_en"),
+#endif
 	COMPAT(SANDBOX_HOST_EMULATION, "sandbox,host-emulation"),
 	COMPAT(SANDBOX_LCD_SDL, "sandbox,lcd-sdl"),
 	COMPAT(TI_TPS65090, "ti,tps65090"),
@@ -81,32 +94,114 @@ const char *fdtdec_get_compatible(enum fdt_compat_id id)
 	return compat_names[id];
 }
 
+fdt_addr_t fdtdec_get_addr_size_fixed(const void *blob, int node,
+		const char *prop_name, int index, int na, int ns,
+		fdt_size_t *sizep)
+{
+	const fdt32_t *prop, *prop_end;
+	const fdt32_t *prop_addr, *prop_size, *prop_after_size;
+	int len;
+	fdt_addr_t addr;
+
+	debug("%s: %s: ", __func__, prop_name);
+
+	if (na > (sizeof(fdt_addr_t) / sizeof(fdt32_t))) {
+		debug("(na too large for fdt_addr_t type)\n");
+		return FDT_ADDR_T_NONE;
+	}
+
+	if (ns > (sizeof(fdt_size_t) / sizeof(fdt32_t))) {
+		debug("(ns too large for fdt_size_t type)\n");
+		return FDT_ADDR_T_NONE;
+	}
+
+	prop = fdt_getprop(blob, node, prop_name, &len);
+	if (!prop) {
+		debug("(not found)\n");
+		return FDT_ADDR_T_NONE;
+	}
+	prop_end = prop + (len / sizeof(*prop));
+
+	prop_addr = prop + (index * (na + ns));
+	prop_size = prop_addr + na;
+	prop_after_size = prop_size + ns;
+	if (prop_after_size > prop_end) {
+		debug("(not enough data: expected >= %d cells, got %d cells)\n",
+		      (u32)(prop_after_size - prop), ((u32)(prop_end - prop)));
+		return FDT_ADDR_T_NONE;
+	}
+
+	addr = fdtdec_get_number(prop_addr, na);
+
+	if (sizep) {
+		*sizep = fdtdec_get_number(prop_size, ns);
+		debug("addr=%08llx, size=%llx\n", (u64)addr, (u64)*sizep);
+	} else {
+		debug("addr=%08llx\n", (u64)addr);
+	}
+
+	return addr;
+}
+
+fdt_addr_t fdtdec_get_addr_size_auto_parent(const void *blob, int parent,
+		int node, const char *prop_name, int index, fdt_size_t *sizep)
+{
+	int na, ns;
+
+	debug("%s: ", __func__);
+
+	na = fdt_address_cells(blob, parent);
+	if (na < 1) {
+		debug("(bad #address-cells)\n");
+		return FDT_ADDR_T_NONE;
+	}
+
+	ns = fdt_size_cells(blob, parent);
+#ifndef CONFIG_ROCKCHIP
+	/* Rockchip platforms i2c slave node set "#size-cells = <0>", so skip */
+	if (ns < 1) {
+		debug("(bad #size-cells)\n");
+		return FDT_ADDR_T_NONE;
+	}
+#endif
+	debug("na=%d, ns=%d, ", na, ns);
+
+	return fdtdec_get_addr_size_fixed(blob, node, prop_name, index, na,
+					  ns, sizep);
+}
+
+/*
+ * @index: the index of reg array.
+ *	reg = <0xff750000 0x100>, <0xff730084 0x0c>, <0xff730064 0x0c>, ...
+ *	index = 0 means: <0xff750000 0x100>
+ *
+ * @sizep: out return value, saving size info from 'reg' property.
+ */
+fdt_addr_t fdtdec_get_addr_size_auto_noparent(const void *blob, int node,
+		const char *prop_name, int index, fdt_size_t *sizep)
+{
+	int parent;
+
+	debug("%s: ", __func__);
+
+	parent = fdt_parent_offset(blob, node);
+	if (parent < 0) {
+		debug("(no parent found)\n");
+		return FDT_ADDR_T_NONE;
+	}
+
+	return fdtdec_get_addr_size_auto_parent(blob, parent, node, prop_name,
+						index, sizep);
+}
+
 fdt_addr_t fdtdec_get_addr_size(const void *blob, int node,
 		const char *prop_name, fdt_size_t *sizep)
 {
-	const fdt_addr_t *cell;
-	int len;
+	int ns = sizep ? (sizeof(fdt_size_t) / sizeof(fdt32_t)) : 0;
 
-	debug("%s: %s: ", __func__, prop_name);
-	cell = fdt_getprop(blob, node, prop_name, &len);
-	if (cell && ((!sizep && len == sizeof(fdt_addr_t)) ||
-		     len == sizeof(fdt_addr_t) * 2)) {
-		fdt_addr_t addr = fdt_addr_to_cpu(*cell);
-		if (sizep) {
-			const fdt_size_t *size;
-
-			size = (fdt_size_t *)((char *)cell +
-					sizeof(fdt_addr_t));
-			*sizep = fdt_size_to_cpu(*size);
-			debug("addr=%08lx, size=%08x\n",
-			      (ulong)addr, *sizep);
-		} else {
-			debug("%08lx\n", (ulong)addr);
-		}
-		return addr;
-	}
-	debug("(not found)\n");
-	return FDT_ADDR_T_NONE;
+	return fdtdec_get_addr_size_fixed(blob, node, prop_name, 0,
+					  sizeof(fdt_addr_t) / sizeof(fdt32_t),
+					  ns, sizep);
 }
 
 fdt_addr_t fdtdec_get_addr(const void *blob, int node,
@@ -342,8 +437,7 @@ int fdtdec_get_alias_seq(const void *blob, const char *base, int offset,
 		const char *prop;
 		const char *name;
 		const char *slash;
-		const char *p;
-		int len;
+		int len, val;
 
 		prop = fdt_getprop_by_offset(blob, prop_offset, &name, &len);
 		debug("   - %s, %s\n", name, prop);
@@ -354,12 +448,11 @@ int fdtdec_get_alias_seq(const void *blob, const char *base, int offset,
 		slash = strrchr(prop, '/');
 		if (strcmp(slash + 1, find_name))
 			continue;
-		for (p = name; *p; p++) {
-			if (isdigit(*p)) {
-				*seqp = simple_strtoul(p, NULL, 10);
-				debug("Found seq %d\n", *seqp);
-				return 0;
-			}
+		val = trailing_strtol(name);
+		if (val != -1) {
+			*seqp = val;
+			debug("Found seq %d\n", *seqp);
+			return 0;
 		}
 	}
 
@@ -484,6 +577,26 @@ int fdtdec_get_int_array(const void *blob, int node, const char *prop_name,
 	return err;
 }
 
+int fdtdec_get_int_array_count(const void *blob, int node,
+			       const char *prop_name, u32 *array, int count)
+{
+	const u32 *cell;
+	int len, elems;
+	int i;
+
+	debug("%s: %s\n", __func__, prop_name);
+	cell = fdt_getprop(blob, node, prop_name, &len);
+	if (!cell)
+		return -FDT_ERR_NOTFOUND;
+	elems = len / sizeof(u32);
+	if (count > elems)
+		count = elems;
+	for (i = 0; i < count; i++)
+		array[i] = fdt32_to_cpu(cell[i]);
+
+	return count;
+}
+
 const u32 *fdtdec_locate_array(const void *blob, int node,
 			       const char *prop_name, int count)
 {
@@ -504,6 +617,7 @@ int fdtdec_get_bool(const void *blob, int node, const char *prop_name)
 	cell = fdt_getprop(blob, node, prop_name, &len);
 	return cell != NULL;
 }
+
 
 /**
  * Decode a list of GPIOs from an FDT. This creates a list of GPIOs with no
@@ -543,13 +657,45 @@ int fdtdec_decode_gpios(const void *blob, int node, const char *prop_name,
 			"property '%s'\n", __func__, prop_name);
 		return -FDT_ERR_BADLAYOUT;
 	}
+#ifdef CONFIG_ROCKCHIP
+	u32 gpio_dts, gpio_addr;
+	int gpio_node;
 
+	/* Fist find rk pinctrl node, prepare for decode gpio */
+	static int pinctrl_node = -1;
+	if (pinctrl_node < 0) {
+		pinctrl_node = fdt_path_offset(blob, "/pinctrl");
+		if (pinctrl_node < 0) {
+			printf("%s: pinctrl node can't find by path: /pinctrl", __func__);
+			return -FDT_ERR_NOTFOUND;
+		}
+	}
+
+        for (i = 0; i < len; i++, cell += 3) {
+		gpio_node = fdt_node_offset_by_phandle_node(blob, pinctrl_node,
+							fdt32_to_cpu(cell[0]));
+		gpio_addr = fdtdec_get_addr_size_auto_noparent(blob, gpio_node,
+							       "reg", 0, NULL);
+		debug("gpio address = 0x%x\n", gpio_addr);
+		gpio_dts = fdt32_to_cpu(cell[1]) | gpio_addr;
+
+		/* change dts gpio to rk uboot gpio */
+#ifdef CONFIG_RK_GPIO
+		gpio[i].gpio = rk_gpio_base_to_bank(gpio_dts & RK_GPIO_BANK_MASK) | (gpio_dts & RK_GPIO_PIN_MASK);
+#else
+		gpio[i].gpio = gpio_dts;
+#endif
+		gpio[i].flags = fdt32_to_cpu(cell[2]);
+		gpio[i].name = name;
+        }
+#else
 	/* Read out the GPIO data from the cells */
 	for (i = 0; i < len; i++, cell += 3) {
 		gpio[i].gpio = fdt32_to_cpu(cell[1]);
 		gpio[i].flags = fdt32_to_cpu(cell[2]);
 		gpio[i].name = name;
 	}
+#endif
 
 	return len;
 }
@@ -668,20 +814,25 @@ char *fdtdec_get_config_string(const void *blob, const char *prop_name)
 	return (char *)nodep;
 }
 
-int fdtdec_decode_region(const void *blob, int node,
-		const char *prop_name, void **ptrp, size_t *size)
+int fdtdec_decode_region(const void *blob, int node, const char *prop_name,
+			 fdt_addr_t *basep, fdt_size_t *sizep)
 {
 	const fdt_addr_t *cell;
 	int len;
 
-	debug("%s: %s\n", __func__, prop_name);
+	debug("%s: %s: %s\n", __func__, fdt_get_name(blob, node, NULL),
+	      prop_name);
 	cell = fdt_getprop(blob, node, prop_name, &len);
-	if (!cell || (len != sizeof(fdt_addr_t) * 2))
+	if (!cell || (len < sizeof(fdt_addr_t) * 2)) {
+		debug("cell=%p, len=%d\n", cell, len);
 		return -1;
+	}
 
-	*ptrp = map_sysmem(fdt_addr_to_cpu(*cell), *size);
-	*size = fdt_size_to_cpu(cell[1]);
-	debug("%s: size=%zx\n", __func__, *size);
+	*basep = fdt_addr_to_cpu(*cell);
+	*sizep = fdt_size_to_cpu(cell[1]);
+	debug("%s: base=%08lx, size=%lx\n", __func__, (ulong)*basep,
+	      (ulong)*sizep);
+
 	return 0;
 }
 
@@ -697,6 +848,7 @@ int fdtdec_decode_region(const void *blob, int node,
 int fdtdec_read_fmap_entry(const void *blob, int node, const char *name,
 			   struct fmap_entry *entry)
 {
+	const char *prop;
 	u32 reg[2];
 
 	if (fdtdec_get_int_array(blob, node, "reg", reg, 2)) {
@@ -705,6 +857,145 @@ int fdtdec_read_fmap_entry(const void *blob, int node, const char *name,
 	}
 	entry->offset = reg[0];
 	entry->length = reg[1];
+	entry->used = fdtdec_get_int(blob, node, "used", entry->length);
+	prop = fdt_getprop(blob, node, "compress", NULL);
+	entry->compress_algo = prop && !strcmp(prop, "lzo") ?
+		FMAP_COMPRESS_LZO : FMAP_COMPRESS_NONE;
+	prop = fdt_getprop(blob, node, "hash", &entry->hash_size);
+	entry->hash_algo = prop ? FMAP_HASH_SHA256 : FMAP_HASH_NONE;
+	entry->hash = (uint8_t *)prop;
+
+	return 0;
+}
+
+u64 fdtdec_get_number(const fdt32_t *ptr, unsigned int cells)
+{
+	u64 number = 0;
+
+	while (cells--)
+		number = (number << 32) | fdt32_to_cpu(*ptr++);
+
+	return number;
+}
+
+int fdt_get_resource(const void *fdt, int node, const char *property,
+		     unsigned int index, struct fdt_resource *res)
+{
+	const fdt32_t *ptr, *end;
+	int na, ns, len, parent;
+	unsigned int i = 0;
+
+	parent = fdt_parent_offset(fdt, node);
+	if (parent < 0)
+		return parent;
+
+	na = fdt_address_cells(fdt, parent);
+	ns = fdt_size_cells(fdt, parent);
+
+	ptr = fdt_getprop(fdt, node, property, &len);
+	if (!ptr)
+		return len;
+
+	end = ptr + len / sizeof(*ptr);
+
+	while (ptr + na + ns <= end) {
+		if (i == index) {
+			res->start = res->end = fdtdec_get_number(ptr, na);
+			res->end += fdtdec_get_number(&ptr[na], ns) - 1;
+			return 0;
+		}
+
+		ptr += na + ns;
+		i++;
+	}
+
+	return -FDT_ERR_NOTFOUND;
+}
+
+int fdt_get_named_resource(const void *fdt, int node, const char *property,
+			   const char *prop_names, const char *name,
+			   struct fdt_resource *res)
+{
+	int index;
+
+	index = fdt_find_string(fdt, node, prop_names, name);
+	if (index < 0)
+		return index;
+
+	return fdt_get_resource(fdt, node, property, index, res);
+}
+
+int fdtdec_pci_get_bdf(const void *fdt, int node, int *bdf)
+{
+	const fdt32_t *prop;
+	int len;
+
+	prop = fdt_getprop(fdt, node, "reg", &len);
+	if (!prop)
+		return len;
+
+	*bdf = fdt32_to_cpu(*prop) & 0xffffff;
+
+	return 0;
+}
+
+int fdtdec_decode_memory_region(const void *blob, int config_node,
+				const char *mem_type, const char *suffix,
+				fdt_addr_t *basep, fdt_size_t *sizep)
+{
+	char prop_name[50];
+	const char *mem;
+	fdt_size_t size, offset_size;
+	fdt_addr_t base, offset;
+	int node;
+
+	if (config_node == -1) {
+		config_node = fdt_path_offset(blob, "/config");
+		if (config_node < 0) {
+			debug("%s: Cannot find /config node\n", __func__);
+			return -ENOENT;
+		}
+	}
+	if (!suffix)
+		suffix = "";
+
+	snprintf(prop_name, sizeof(prop_name), "%s-memory%s", mem_type,
+		 suffix);
+	mem = fdt_getprop(blob, config_node, prop_name, NULL);
+	if (!mem) {
+		debug("%s: No memory type for '%s', using /memory\n", __func__,
+		      prop_name);
+		mem = "/memory";
+	}
+
+	node = fdt_path_offset(blob, mem);
+	if (node < 0) {
+		debug("%s: Failed to find node '%s': %s\n", __func__, mem,
+		      fdt_strerror(node));
+		return -ENOENT;
+	}
+
+	/*
+	 * Not strictly correct - the memory may have multiple banks. We just
+	 * use the first
+	 */
+	if (fdtdec_decode_region(blob, node, "reg", &base, &size)) {
+		debug("%s: Failed to decode memory region %s\n", __func__,
+		      mem);
+		return -EINVAL;
+	}
+
+	snprintf(prop_name, sizeof(prop_name), "%s-offset%s", mem_type,
+		 suffix);
+	if (fdtdec_decode_region(blob, config_node, prop_name, &offset,
+				 &offset_size)) {
+		debug("%s: Failed to decode memory region '%s'\n", __func__,
+		      prop_name);
+		return -EINVAL;
+	}
+
+	*basep = base + offset;
+	*sizep = offset_size;
 
 	return 0;
 }

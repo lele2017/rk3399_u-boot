@@ -196,6 +196,9 @@ struct usb_bus_instance;
 #define USB_DT_STRING			0x03
 #define USB_DT_INTERFACE		0x04
 #define USB_DT_ENDPOINT			0x05
+#if defined(CONFIG_ROCKCHIP)
+#define USB_DT_DEVICE_CAPABILITY	0x10
+#endif
 
 #if defined(CONFIG_USBD_HS)
 #define USB_DT_QUAL			0x06
@@ -330,6 +333,9 @@ struct usb_bus_instance;
 #define USB_DESCRIPTOR_TYPE_DEVICE_QUALIFIER		0x06
 #define USB_DESCRIPTOR_TYPE_OTHER_SPEED_CONFIGURATION	0x07
 #define USB_DESCRIPTOR_TYPE_INTERFACE_POWER		0x08
+#if defined(CONFIG_ROCKCHIP)
+#define USB_DESCRIPTOR_TYPE_BOS				0x0F
+#endif
 #define USB_DESCRIPTOR_TYPE_HID				0x21
 #define USB_DESCRIPTOR_TYPE_REPORT			0x22
 
@@ -474,14 +480,15 @@ struct urb {
 
 	struct urb_link link;	/* embedded struct for circular doubly linked list of urbs */
 
-	u8* buffer;
-	unsigned int buffer_length;
-	unsigned int actual_length;
+	volatile u8* buffer;
+	volatile unsigned int buffer_length;
+	volatile unsigned int actual_length;
 
 	urb_send_status_t status;
 	int data;
 
-	u16 buffer_data[URB_BUF_SIZE];	/* data received (OUT) or being sent (IN) */
+	/* data received (OUT) or being sent (IN) */
+	u16 buffer_data[URB_BUF_SIZE] __attribute__((aligned(ARCH_DMA_MINALIGN)));
 };
 
 /* Endpoint configuration
@@ -565,7 +572,9 @@ struct usb_device_instance {
 #if defined(CONFIG_USBD_HS)
 	struct usb_qualifier_descriptor *qualifier_descriptor;
 #endif
-
+#if defined(CONFIG_ROCKCHIP)
+	struct usb_bos_descriptor *bos_descriptor;
+#endif
 	void (*event) (struct usb_device_instance *device, usb_device_event_t event, int data);
 
 	/* Do cdc device specific control requests */

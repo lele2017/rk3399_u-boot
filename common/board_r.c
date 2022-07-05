@@ -60,7 +60,7 @@ DECLARE_GLOBAL_DATA_PTR;
 
 ulong monitor_flash_len;
 
-int __board_flash_wp_on(void)
+__weak int board_flash_wp_on(void)
 {
 	/*
 	 * Most flashes can't be detected when write protection is enabled,
@@ -70,15 +70,9 @@ int __board_flash_wp_on(void)
 	return 0;
 }
 
-int board_flash_wp_on(void)
-	__attribute__ ((weak, alias("__board_flash_wp_on")));
-
-void __cpu_secondary_init_r(void)
+__weak void cpu_secondary_init_r(void)
 {
 }
-
-void cpu_secondary_init_r(void)
-	__attribute__ ((weak, alias("__cpu_secondary_init_r")));
 
 static int initr_secondary_cpu(void)
 {
@@ -287,7 +281,11 @@ __weak int power_init_board(void)
 
 static int initr_announce(void)
 {
+#ifndef CONFIG_SKIP_RELOCATE_UBOOT
 	debug("Now running in RAM - U-Boot at: %08lx\n", gd->relocaddr);
+#else
+	debug("Now running in RAM - U-Boot at: %08lx\n", CONFIG_SYS_TEXT_BASE);
+#endif
 	return 0;
 }
 
@@ -370,7 +368,7 @@ static int initr_spi(void)
 
 #ifdef CONFIG_CMD_NAND
 /* go init the NAND */
-int initr_nand(void)
+static int initr_nand(void)
 {
 	puts("NAND:  ");
 	nand_init();
@@ -380,7 +378,7 @@ int initr_nand(void)
 
 #if defined(CONFIG_CMD_ONENAND)
 /* go init the NAND */
-int initr_onenand(void)
+static int initr_onenand(void)
 {
 	puts("NAND:  ");
 	onenand_init();
@@ -389,7 +387,7 @@ int initr_onenand(void)
 #endif
 
 #ifdef CONFIG_GENERIC_MMC
-int initr_mmc(void)
+static int initr_mmc(void)
 {
 	puts("MMC:   ");
 	mmc_initialize(gd->bd);
@@ -398,13 +396,23 @@ int initr_mmc(void)
 #endif
 
 #ifdef CONFIG_HAS_DATAFLASH
-int initr_dataflash(void)
+static int initr_dataflash(void)
 {
 	AT91F_DataflashInit();
 	dataflash_print_info();
 	return 0;
 }
 #endif
+
+#ifdef CONFIG_ROCKCHIP
+extern int board_storage_init(void);
+static int initr_rk_storage(void)
+{
+	board_storage_init();
+	return 0;
+}
+#endif
+
 
 /*
  * Tell if it's OK to load the environment early in boot.
@@ -499,22 +507,6 @@ static int initr_api(void)
 {
 	/* Initialize API */
 	api_init();
-	return 0;
-}
-#endif
-
-#ifdef CONFIG_DISPLAY_BOARDINFO_LATE
-static int show_model_r(void)
-{
-	/* Put this here so it appears on the LCD, now it is ready */
-# ifdef CONFIG_OF_CONTROL
-	const char *model;
-
-	model = (char *)fdt_getprop(gd->fdt_blob, 0, "model", NULL);
-	printf("Model: %s\n", model ? model : "<unknown>");
-# else
-	checkboard();
-# endif
 	return 0;
 }
 #endif
@@ -802,6 +794,9 @@ init_fnc_t init_sequence_r[] = {
 #ifdef CONFIG_HAS_DATAFLASH
 	initr_dataflash,
 #endif
+#ifdef CONFIG_ROCKCHIP
+	initr_rk_storage,
+#endif
 	initr_env,
 	INIT_FUNC_WATCHDOG_RESET
 	initr_secondary_cpu,
@@ -828,7 +823,7 @@ init_fnc_t init_sequence_r[] = {
 #endif
 	console_init_r,		/* fully init console as a device */
 #ifdef CONFIG_DISPLAY_BOARDINFO_LATE
-	show_model_r,
+	show_board_info,
 #endif
 #ifdef CONFIG_ARCH_MISC_INIT
 	arch_misc_init,		/* miscellaneous arch-dependent init */

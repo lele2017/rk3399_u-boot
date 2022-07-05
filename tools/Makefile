@@ -55,6 +55,18 @@ mkenvimage-objs := mkenvimage.o os_support.o lib/crc32.o
 hostprogs-y += dumpimage mkimage
 hostprogs-$(CONFIG_FIT_SIGNATURE) += fit_info fit_check_sign
 
+# rockchip tools
+ifdef CONFIG_ROCKCHIP
+hostprogs-y += boot_merger
+hostprogs-y += loaderimage
+hostprogs-$(CONFIG_MERGER_TRUSTIMAGE) += trust_merger
+hostprogs-$(CONFIG_QUICK_CHECKSUM) += checksum
+
+trust_merger-objs := trust_merger.o lib/sha2.o lib/sha256.o
+loaderimage-objs := loaderimage.o lib/sha.o lib/sha256.o lib/crc32_rk.o
+checksum-objs := checksum.o lib/crc32_rk.o
+endif # CONFIG_ROCKCHIP
+
 FIT_SIG_OBJS-$(CONFIG_FIT_SIGNATURE) := common/image-sig.o
 # Flattened device tree objects
 LIBFDT_OBJS := $(addprefix lib/libfdt/, \
@@ -90,6 +102,7 @@ dumpimage-mkimage-objs := aisimage.o \
 			socfpgaimage.o \
 			lib/sha1.o \
 			lib/sha256.o \
+			common/hash.o \
 			ublimage.o \
 			$(LIBFDT_OBJS) \
 			$(RSA_OBJS-y)
@@ -175,7 +188,11 @@ LOGO-$(CONFIG_VIDEO_LOGO) += $(LOGO_DATA_H)
 
 # Generic logo
 ifeq ($(LOGO_BMP),)
+ifndef CONFIG_ROCKCHIP
 LOGO_BMP= $(srctree)/$(src)/logos/denx.bmp
+else
+LOGO_BMP= $(srctree)/$(src)/logos/rockchip.bmp
+endif
 
 # Use board logo and fallback to vendor
 ifneq ($(wildcard $(srctree)/$(src)/logos/$(BOARD).bmp),)
@@ -201,6 +218,20 @@ HOST_EXTRACFLAGS += -include $(srctree)/include/libfdt_env.h \
 		-DUSE_HOSTCC \
 		-D__KERNEL_STRICT_NAMES \
 		-D_GNU_SOURCE
+
+#
+# rockchip compress logo flag define
+#
+ifneq ($(CONFIG_ROCKCHIP),)
+ifneq ($(CONFIG_COMPRESS_LOGO_RLE16),)
+HOSTCFLAGS += -DCOMPRESS_RLE16
+else
+ifneq ($(CONFIG_COMPRESS_LOGO_RLE8),)
+HOSTCFLAGS += -DCOMPRESS_RLE8
+endif # /* CONFIG_COMPRESS_LOGO_RLE8 */
+endif # /* CONFIG_COMPRESS_LOGO_RLE16 */
+endif # /* CONFIG_ROCKCHIP */
+
 
 __build:	$(LOGO-y)
 

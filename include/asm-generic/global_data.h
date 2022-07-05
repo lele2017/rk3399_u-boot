@@ -23,16 +23,28 @@
 #ifndef __ASSEMBLY__
 #include <linux/list.h>
 
+/* Never change the sequence of members !!! */
+struct pm_ctx {
+	unsigned long sp;
+	phys_addr_t cpu_resume_addr;
+	unsigned long suspend_regs[15];
+};
+
 typedef struct global_data {
 	bd_t *bd;
 	unsigned long flags;
 	unsigned int baudrate;
 	unsigned long cpu_clk;	/* CPU clock in Hz!		*/
+#ifdef CONFIG_ROCKCHIP
+	unsigned long cpul_clk;	/* CPU clock in Hz!		*/
+	unsigned long fb_offset;/* Address offset of kernel logo */
+	int uboot_logo;		/* uboot logo state*/
+#endif
 	unsigned long bus_clk;
 	/* We cannot bracket this with CONFIG_PCI due to mpc5xxx */
 	unsigned long pci_clk;
 	unsigned long mem_clk;
-#if defined(CONFIG_LCD) || defined(CONFIG_VIDEO)
+#if defined(CONFIG_LCD) || defined(CONFIG_VIDEO) || defined(CONFIG_ROCKCHIP_DISPLAY)
 	unsigned long fb_base;	/* Base address of framebuffer mem */
 #endif
 #if defined(CONFIG_POST) || defined(CONFIG_LOGBUFFER)
@@ -92,6 +104,7 @@ typedef struct global_data {
 	unsigned long malloc_ptr;	/* current address */
 #endif
 	struct arch_global_data arch;	/* architecture-specific data */
+	phys_addr_t pm_ctx_phys;
 } gd_t;
 #endif
 
@@ -107,5 +120,19 @@ typedef struct global_data {
 #define GD_FLG_DISABLE_CONSOLE	0x00040	/* Disable console (in & out)	   */
 #define GD_FLG_ENV_READY	0x00080	/* Env. imported into hash table   */
 #define GD_FLG_SERIAL_READY	0x00100	/* Pre-reloc serial console ready  */
+
+
+#ifdef CONFIG_ROCKCHIP
+
+/*
+ * Global Data Flags
+ *
+ * Note: The low 16 bits are expected for common code.  If your arch
+ *       really needs to add your own, use the high 16bits.
+ */
+#define GD_FLG_IRQINIT		(0x00001 << 16)	/* interrupt have been initialized   */
+
+#endif /* CONFIG_ROCKCHIP */
+
 
 #endif /* __ASM_GENERIC_GBL_DATA_H */

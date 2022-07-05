@@ -184,6 +184,38 @@ export	HOSTARCH HOSTOS
 
 #########################################################################
 
+ifeq ($(ARCHV),aarch64)
+
+ifneq ($(wildcard ../toolchain/aarch64-linux-android-4.9),)
+CROSS_COMPILE   ?= $(shell pwd)/../toolchain/aarch64-linux-android-4.9/bin/aarch64-linux-android-
+endif
+ifneq ($(wildcard ../prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin),)
+CROSS_COMPILE   ?= $(shell pwd)/../prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-
+endif
+
+else
+
+ifneq ($(wildcard ../toolchain/arm-eabi-4.8),)
+CROSS_COMPILE   ?= $(shell pwd)/../toolchain/arm-eabi-4.8/bin/arm-eabi-
+endif
+ifneq ($(wildcard ../toolchain/arm-eabi-4.7),)
+CROSS_COMPILE   ?= $(shell pwd)/../toolchain/arm-eabi-4.7/bin/arm-eabi-
+endif
+ifneq ($(wildcard ../toolchain/arm-eabi-4.6),)
+CROSS_COMPILE   ?= $(shell pwd)/../toolchain/arm-eabi-4.6/bin/arm-eabi-
+endif
+ifneq ($(wildcard ../prebuilts/gcc/linux-x86/arm/arm-eabi-4.8/bin),)
+CROSS_COMPILE   ?= $(shell pwd)/../prebuilts/gcc/linux-x86/arm/arm-eabi-4.8/bin/arm-eabi-
+endif
+ifneq ($(wildcard ../prebuilts/gcc/linux-x86/arm/arm-eabi-4.7/bin),)
+CROSS_COMPILE   ?= $(shell pwd)/../prebuilts/gcc/linux-x86/arm/arm-eabi-4.7/bin/arm-eabi-
+endif
+ifneq ($(wildcard ../prebuilts/gcc/linux-x86/arm/arm-eabi-4.6/bin),)
+CROSS_COMPILE   ?= $(shell pwd)/../prebuilts/gcc/linux-x86/arm/arm-eabi-4.6/bin/arm-eabi-
+endif
+
+endif # ARCHV=aarch64
+
 # set default to nothing for native builds
 ifeq ($(HOSTARCH),$(ARCH))
 CROSS_COMPILE ?=
@@ -629,6 +661,7 @@ libs-y += drivers/power/ \
 	drivers/power/fuel_gauge/ \
 	drivers/power/mfd/ \
 	drivers/power/pmic/ \
+	drivers/power/charge/ \
 	drivers/power/battery/
 libs-y += drivers/spi/
 libs-$(CONFIG_FMAN_ENET) += drivers/net/fm/
@@ -754,6 +787,11 @@ endif
 endif
 endif
 
+# Add optional build target if defined in board/cpu/soc headers
+ifneq ($(CONFIG_BUILD_TARGET),)
+ALL-y += $(CONFIG_BUILD_TARGET:"%"=%)
+endif
+
 LDFLAGS_u-boot += $(LDFLAGS_FINAL)
 ifneq ($(CONFIG_SYS_TEXT_BASE),)
 LDFLAGS_u-boot += -Ttext $(CONFIG_SYS_TEXT_BASE)
@@ -775,6 +813,13 @@ quiet_cmd_pad_cat = CAT     $@
 cmd_pad_cat = $(cmd_objcopy) && $(append) || rm -f $@
 
 all:		$(ALL-y)
+ifneq ($(CONFIG_SYS_GENERIC_BOARD),y)
+	@echo "===================== WARNING ======================"
+	@echo "Please convert this board to generic board."
+	@echo "Otherwise it will be removed by the end of 2014."
+	@echo "See doc/README.generic-board for further information"
+	@echo "===================================================="
+endif
 
 PHONY += dtbs
 dtbs dts/dt.dtb: checkdtc u-boot
@@ -831,6 +876,111 @@ OBJCOPYFLAGS_u-boot.ldr.srec := -I binary -O srec
 
 u-boot.ldr.hex u-boot.ldr.srec: u-boot.ldr FORCE
 	$(call if_changed,objcopy)
+
+ifdef CONFIG_ROCKCHIP
+
+# rk uboot version should consist of two digits, as 01
+RK_UBOOT_VERSION = 06
+
+ifdef CONFIG_RKCHIP_RK3288
+RKCHIP ?= RK3288
+endif
+
+ifdef CONFIG_RKCHIP_RK3036
+RKCHIP ?= RK3036
+endif
+
+ifdef CONFIG_RKCHIP_RK3126
+RKCHIP ?= RK3126
+endif
+
+ifdef CONFIG_RKCHIP_RK3128
+RKCHIP ?= RK3128
+endif
+
+ifdef CONFIG_RKCHIP_RK322X
+ifdef CONFIG_RKCHIP_RK3128X
+RKCHIP ?= RK3128X
+else
+RKCHIP ?= RK322X
+endif
+endif
+
+ifdef CONFIG_RKCHIP_RK3368
+ifdef CONFIG_RKCHIP_PX5
+RKCHIP ?= PX5
+else ifdef CONFIG_RKCHIP_PX5_KERNEL4_4
+RKCHIP ?= PX5KERNEL4.4
+else ifdef CONFIG_RKCHIP_RK3368H
+ifdef CONFIG_PRODUCT_MID
+RKCHIP ?= RK3368H
+else
+RKCHIP ?= RK3368BOX
+endif
+else
+RKCHIP ?= RK3368
+endif
+endif
+
+ifdef CONFIG_RKCHIP_RK3366
+RKCHIP ?= RK3366
+endif
+
+ifdef CONFIG_RKCHIP_RK3399
+RKCHIP ?= RK3399
+endif
+
+ifdef CONFIG_RKCHIP_RK322XH
+ifdef CONFIG_RKCHIP_RK3328
+RKCHIP ?= RK3328
+else
+RKCHIP ?= RK322XH
+endif
+endif
+
+RKCHIP ?= `sed -n "/CHIP=/s/CHIP=//p" RKBOOT.ini|tr -d '\r'`
+
+UBOOTVERSION := $(UBOOTVERSION)$(if $(RKCHIP),-$(RKCHIP))$(if $(RK_UBOOT_VERSION),-$(RK_UBOOT_VERSION))
+
+RK_SUBFIX = $(if $(RK_UBOOT_VERSION),.$(RK_UBOOT_VERSION)).bin
+
+ifdef CONFIG_MERGER_TRUSTOS
+# trust OS without or with TA.
+# Most platforms only need one image generated, but some platforms require both two image generated.
+# Such as rk322x, it need generate trust.img for legacy request and trust_with_ta.img for latest request.
+RK_TOS_BIN ?= $(shell sed -n "/TOS=/s/TOS=//p" ./tools/rk_tools/RKTRUST/$(RKCHIP)TOS.ini|tr -d '\r')
+RK_TOS_TA_BIN ?= $(shell sed -n "/TOSTA=/s/TOSTA=//p" ./tools/rk_tools/RKTRUST/$(RKCHIP)TOS.ini|tr -d '\r')
+
+# multi trust.img used for different functions, such as: one image for emmc, another image for nand, etc.
+RK_TOS0_BIN ?= $(shell sed -n "/TOS0=/s/TOS0=//p" ./tools/rk_tools/RKTRUST/$(RKCHIP)TOS.ini|tr -d '\r')
+RK_TOS0_IMG ?= $(shell sed -n "/PATH0=/s/PATH0=//p" ./tools/rk_tools/RKTRUST/$(RKCHIP)TOS.ini|tr -d '\r')
+RK_TOS1_BIN ?= $(shell sed -n "/TOS1=/s/TOS1=//p" ./tools/rk_tools/RKTRUST/$(RKCHIP)TOS.ini|tr -d '\r')
+RK_TOS1_IMG ?= $(shell sed -n "/PATH1=/s/PATH1=//p" ./tools/rk_tools/RKTRUST/$(RKCHIP)TOS.ini|tr -d '\r')
+endif
+
+RKLoader_uboot.bin: u-boot.bin
+ifdef CONFIG_SECOND_LEVEL_BOOTLOADER
+ifdef CONFIG_PRODUCT_ECHO
+	$(if $(CONFIG_MERGER_MINILOADER), ./tools/boot_merger ./tools/rk_tools/RKBOOT/$(RKCHIP)_ECHOMINIALL.ini)
+else
+	$(if $(CONFIG_MERGER_MINILOADER), ./tools/boot_merger ./tools/rk_tools/RKBOOT/$(RKCHIP)MINIALL.ini)
+endif
+	$(if $(CONFIG_MERGER_TRUSTIMAGE), ./tools/trust_merger $(if $(CONFIG_RK_TRUSTOS), --subfix) \
+					$(if $(CONFIG_RKCHIP_RK3368), --sha 2) ./tools/rk_tools/RKTRUST/$(RKCHIP)TRUST.ini)
+
+ifdef CONFIG_MERGER_TRUSTOS
+	$(if $(RK_TOS_BIN), ./tools/loaderimage --pack --trustos $(RK_TOS_BIN) trust.img)
+	$(if $(RK_TOS_TA_BIN), ./tools/loaderimage --pack --trustos $(RK_TOS_TA_BIN) $(if $(RK_TOS_BIN), trust_with_ta.img, trust.img))
+
+	$(if $(RK_TOS0_BIN), ./tools/loaderimage --pack --trustos $(RK_TOS0_BIN) $(RK_TOS0_IMG))
+	$(if $(RK_TOS1_BIN), ./tools/loaderimage --pack --trustos $(RK_TOS1_BIN) $(RK_TOS1_IMG))
+endif
+	./tools/loaderimage --pack --uboot u-boot.bin uboot.img
+else
+	./tools/boot_merger --subfix "$(RK_SUBFIX)" $(if $(CONFIG_RKCHIP_RK3288), --size 1024) ./tools/rk_tools/RKBOOT/$(RKCHIP).ini
+endif # CONFIG_SECOND_LEVEL_BOOTLOADER
+
+endif # CONFIG_ROCKCHIP
 
 #
 # U-Boot entry point, needed for booting of full-blown U-Boot
@@ -1108,7 +1258,8 @@ endef
 
 define filechk_timestamp.h
 	(LC_ALL=C date +'#define U_BOOT_DATE "%b %d %C%y"'; \
-	LC_ALL=C date +'#define U_BOOT_TIME "%T"')
+	LC_ALL=C date +'#define U_BOOT_TIME "%T"'; \
+	date +'#define U_BOOT_TIMESTAMP "%F_%0H:%0M:%0S"';)
 endef
 
 $(version_h): include/config/uboot.release FORCE
@@ -1290,7 +1441,12 @@ distclean: mrproper
 		-o -name '.*.rej' -o -name '*%' -o -name 'core' \
 		-o -name '*.pyc' \) \
 		-type f -print | xargs rm -f
+	@find $(srctree) \
+	   -maxdepth 1 \( -name "*.img" -o -name "*.bin" \) \
+	   -type f -print | xargs rm -f
 	@rm -f boards.cfg
+	@rm -f $(srctree)/tools/boot_merger $(srctree)/tools/loaderimage
+	@rm -f $(srctree)/tools/checksum $(srctree)/tools/trust_merger
 
 backup:
 	F=`basename $(srctree)` ; cd .. ; \

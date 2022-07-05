@@ -20,9 +20,11 @@ obj-y += cli_simple.o
 
 obj-y += cli.o
 obj-y += cli_readline.o
+ifndef CONFIG_ROCKCHIP
 obj-y += s_record.o
 obj-y += xyzModem.o
 obj-y += cmd_disk.o
+endif
 
 # This option is not just y/n - it can have a numeric value
 ifdef CONFIG_BOOTDELAY
@@ -37,6 +39,8 @@ endif
 # boards
 obj-$(CONFIG_SYS_GENERIC_BOARD) += board_f.o
 obj-$(CONFIG_SYS_GENERIC_BOARD) += board_r.o
+obj-$(CONFIG_DISPLAY_BOARDINFO) += board_info.o
+obj-$(CONFIG_DISPLAY_BOARDINFO_LATE) += board_info.o
 
 # core command
 obj-y += cmd_boot.o
@@ -56,6 +60,7 @@ extra-$(CONFIG_ENV_IS_IN_FLASH) += env_embedded.o
 obj-$(CONFIG_ENV_IS_IN_NVRAM) += env_embedded.o
 obj-$(CONFIG_ENV_IS_IN_FLASH) += env_flash.o
 obj-$(CONFIG_ENV_IS_IN_MMC) += env_mmc.o
+obj-$(CONFIG_ENV_IS_IN_RK_STORAGE) += env_rk.o
 obj-$(CONFIG_ENV_IS_IN_FAT) += env_fat.o
 obj-$(CONFIG_ENV_IS_IN_NAND) += env_nand.o
 obj-$(CONFIG_ENV_IS_IN_NVRAM) += env_nvram.o
@@ -126,7 +131,9 @@ obj-$(CONFIG_CMD_CRAMFS) += cmd_cramfs.o
 obj-$(CONFIG_CMD_LDRINFO) += cmd_ldrinfo.o
 obj-$(CONFIG_CMD_LED) += cmd_led.o
 obj-$(CONFIG_CMD_LICENSE) += cmd_license.o
+ifndef CONFIG_ROCKCHIP
 obj-y += cmd_load.o
+endif
 obj-$(CONFIG_LOGBUFFER) += cmd_log.o
 obj-$(CONFIG_ID_EEPROM) += cmd_mac.o
 obj-$(CONFIG_CMD_MD5SUM) += cmd_md5sum.o
@@ -153,7 +160,9 @@ obj-$(CONFIG_CMD_PART) += cmd_part.o
 ifdef CONFIG_PCI
 obj-$(CONFIG_CMD_PCI) += cmd_pci.o
 endif
+ifndef CONFIG_ROCKCHIP
 obj-y += cmd_pcmcia.o
+endif
 obj-$(CONFIG_CMD_PORTIO) += cmd_portio.o
 obj-$(CONFIG_CMD_PXE) += cmd_pxe.o
 obj-$(CONFIG_CMD_READ) += cmd_read.o
@@ -172,7 +181,9 @@ obj-$(CONFIG_CMD_STRINGS) += cmd_strings.o
 obj-$(CONFIG_CMD_TERMINAL) += cmd_terminal.o
 obj-$(CONFIG_CMD_TIME) += cmd_time.o
 obj-$(CONFIG_CMD_TRACE) += cmd_trace.o
+ifndef CONFIG_ROCKCHIP
 obj-$(CONFIG_SYS_HUSH_PARSER) += cmd_test.o
+endif
 obj-$(CONFIG_CMD_TPM) += cmd_tpm.o
 obj-$(CONFIG_CMD_TSI148) += cmd_tsi148.o
 obj-$(CONFIG_CMD_UBI) += cmd_ubi.o
@@ -183,7 +194,9 @@ ifdef CONFIG_LZMA
 obj-$(CONFIG_CMD_LZMADEC) += cmd_lzmadec.o
 endif
 ifdef CONFIG_CMD_USB
+ifndef CONFIG_ROCKCHIP
 obj-y += cmd_usb.o
+endif
 obj-y += usb.o usb_hub.o
 obj-$(CONFIG_USB_STORAGE) += usb_storage.o
 endif
@@ -196,6 +209,17 @@ obj-$(CONFIG_YAFFS2) += cmd_yaffs2.o
 obj-$(CONFIG_CMD_SPL) += cmd_spl.o
 obj-$(CONFIG_CMD_ZIP) += cmd_zip.o
 obj-$(CONFIG_CMD_ZFS) += cmd_zfs.o
+
+obj-$(CONFIG_CMD_FASTBOOT) += cmd_fastboot.o
+obj-$(CONFIG_CMD_BOOTRK) += cmd_bootrk.o
+obj-$(CONFIG_CMD_ROCKUSB) += cmd_rockusb.o
+
+obj-$(CONFIG_RESOURCE_PARTITION) += resource.o
+ifdef CONFIG_CMD_FASTBOOT
+ifdef CONFIG_RESOURCE_PARTITION
+obj-$(CONFIG_CMD_CHARGE_ANIM) += cmd_charge.o
+endif
+endif
 
 # others
 obj-$(CONFIG_BOOTSTAGE) += bootstage.o
@@ -265,4 +289,5 @@ obj-y += aboot.o
 obj-y += fb_mmc.o
 endif
 
-CFLAGS_env_embedded.o := -Wa,--no-warn -DENV_CRC=$(shell tools/envcrc 2>/dev/null)
+#CFLAGS_env_embedded.o := -Wa,--no-warn -DENV_CRC=$(shell tools/envcrc 2>/dev/null) -DCONFIG_CMD_RUN=y -DCONFIG_CMD_NET=y -DCONFIG_CMD_PING=y
+CFLAGS_env_embedded.o := -Wa,--no-warn -DENV_CRC=$(shell tools/envcrc 2>/dev/null) -DCONFIG_CMD_RUN=y 

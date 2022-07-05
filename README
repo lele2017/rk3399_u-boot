@@ -617,13 +617,6 @@ The following options need to be configured:
 		exists, unlike the similar options in the Linux kernel. Do not
 		set these options unless they apply!
 
-- CPU timer options:
-		CONFIG_SYS_HZ
-
-		The frequency of the timer returned by get_timer().
-		get_timer() must operate in milliseconds and this CONFIG
-		option must be set to 1000.
-
 - Linux Kernel Interface:
 		CONFIG_CLOCKS_IN_MHZ
 
@@ -1459,6 +1452,9 @@ The following options need to be configured:
 		CONFIG_USB_EHCI_TXFIFO_THRESH enables setting of the
 		txfilltuning field in the EHCI controller on reset.
 
+		CONFIG_USB_DWC2_REG_ADDR the physical CPU address of the DWC2
+		HW module registers.
+
 - USB Device:
 		Define the below if you wish to use the USB console.
 		Once firmware is rebuilt from a serial console issue the
@@ -1644,6 +1640,15 @@ The following options need to be configured:
 		The fastboot "flash" command requires additional information
 		regarding the non-volatile storage device. Define this to
 		the eMMC device that fastboot should use to store the image.
+
+		CONFIG_FASTBOOT_GPT_NAME
+		The fastboot "flash" command supports writing the downloaded
+		image to the Protective MBR and the Primary GUID Partition
+		Table. (Additionally, this downloaded image is post-processed
+		to generate and write the Backup GUID Partition Table.)
+		This occurs when the specified "partition name" on the
+		"fastboot flash" command line matches this value.
+		Default is GPT_ENTRY_NAME (currently "gpt") if undefined.
 
 - Journaling Flash filesystem support:
 		CONFIG_JFFS2_NAND, CONFIG_JFFS2_NAND_OFF, CONFIG_JFFS2_NAND_SIZE,
@@ -2716,6 +2721,14 @@ CBFS (Coreboot Filesystem) support
 		200 ms.
 
 - Configuration Management:
+		CONFIG_BUILD_TARGET
+
+		Some SoCs need special image types (e.g. U-Boot binary
+		with a special header) as build targets. By defining
+		CONFIG_BUILD_TARGET in the SoC / board header, this
+		special image will be automatically built upon calling
+		make / MAKEALL.
+
 		CONFIG_IDENT_STRING
 
 		If defined, this string will be added to the U-Boot
@@ -4047,6 +4060,11 @@ Configuration Settings:
 	This is set by OMAP boards for the max time that reset should
 	be asserted. See doc/README.omap-reset-time for details on how
 	the value can be calulated on a given board.
+
+- CONFIG_USE_STDINT
+	If stdint.h is available with your toolchain you can define this
+	option to enable it. You can provide option 'USE_STDINT=1' when
+	building U-Boot to enable this.
 
 The following definitions that deal with the placement and management
 of environment data (variable area); in general, we support the

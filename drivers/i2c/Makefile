@@ -5,6 +5,9 @@
 # SPDX-License-Identifier:	GPL-2.0+
 #
 
+obj-$(CONFIG_RK_I2C) += rk_i2c.o
+obj-$(CONFIG_RK_I2C_GPIO) += i2c-gpio.o
+
 obj-$(CONFIG_BFIN_TWI_I2C) += bfin-twi_i2c.o
 obj-$(CONFIG_DW_I2C) += designware_i2c.o
 obj-$(CONFIG_I2C_MV) += mv_i2c.o

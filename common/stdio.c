@@ -39,39 +39,39 @@ char *stdio_names[MAX_FILES] = { "stdin", "stdout", "stderr" };
 #endif
 
 #ifdef CONFIG_SYS_DEVICE_NULLDEV
-void nulldev_putc(struct stdio_dev *dev, const char c)
+static void nulldev_putc(struct stdio_dev *dev, const char c)
 {
 	/* nulldev is empty! */
 }
 
-void nulldev_puts(struct stdio_dev *dev, const char *s)
+static void nulldev_puts(struct stdio_dev *dev, const char *s)
 {
 	/* nulldev is empty! */
 }
 
-int nulldev_input(struct stdio_dev *dev)
+static int nulldev_input(struct stdio_dev *dev)
 {
 	/* nulldev is empty! */
 	return 0;
 }
 #endif
 
-void stdio_serial_putc(struct stdio_dev *dev, const char c)
+static void stdio_serial_putc(struct stdio_dev *dev, const char c)
 {
 	serial_putc(c);
 }
 
-void stdio_serial_puts(struct stdio_dev *dev, const char *s)
+static void stdio_serial_puts(struct stdio_dev *dev, const char *s)
 {
 	serial_puts(s);
 }
 
-int stdio_serial_getc(struct stdio_dev *dev)
+static int stdio_serial_getc(struct stdio_dev *dev)
 {
 	return serial_getc();
 }
 
-int stdio_serial_tstc(struct stdio_dev *dev)
+static int stdio_serial_tstc(struct stdio_dev *dev)
 {
 	return serial_tstc();
 }
@@ -197,6 +197,7 @@ int stdio_deregister_dev(struct stdio_dev *dev, int force)
 	}
 
 	list_del(&(dev->list));
+	free(dev);
 
 	/* reassign Device list */
 	list_for_each(pos, &(devs.list)) {
@@ -252,7 +253,9 @@ int stdio_add_devices(void)
 #endif
 #endif
 #ifdef CONFIG_LCD
+#ifndef CONFIG_ROCKCHIP   //move backlight enable to board_init_r, for don't show logo in rockusb
 	drv_lcd_init ();
+#endif
 #endif
 #if defined(CONFIG_VIDEO) || defined(CONFIG_CFB_CONSOLE)
 	drv_video_init ();

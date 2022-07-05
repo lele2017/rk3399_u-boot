@@ -11,21 +11,22 @@ obj-$(CONFIG_RSA) += rsa/
 obj-$(CONFIG_LZMA) += lzma/
 obj-$(CONFIG_LZO) += lzo/
 obj-$(CONFIG_ZLIB) += zlib/
+obj-$(CONFIG_BZIP2) += bzip2/
 obj-$(CONFIG_TIZEN) += tizen/
 
 obj-$(CONFIG_AES) += aes.o
-obj-$(CONFIG_BZIP2) += bzlib.o
-obj-$(CONFIG_BZIP2) += bzlib_crctable.o
-obj-$(CONFIG_BZIP2) += bzlib_decompress.o
-obj-$(CONFIG_BZIP2) += bzlib_randtable.o
-obj-$(CONFIG_BZIP2) += bzlib_huffman.o
 obj-$(CONFIG_USB_TTY) += circbuf.o
 obj-y += crc7.o
 obj-y += crc8.o
 obj-y += crc16.o
+ifndef CONFIG_ROCKCHIP
 obj-$(CONFIG_FIT) += fdtdec_common.o
 obj-$(CONFIG_OF_CONTROL) += fdtdec_common.o
 obj-$(CONFIG_OF_CONTROL) += fdtdec.o
+else
+obj-$(CONFIG_OF_LIBFDT) += fdtdec_common.o
+obj-$(CONFIG_OF_LIBFDT) += fdtdec.o
+endif
 obj-$(CONFIG_TEST_FDTDEC) += fdtdec_test.o
 obj-$(CONFIG_GZIP) += gunzip.o
 obj-$(CONFIG_GZIP_COMPRESSED) += gzip.o
@@ -56,6 +57,7 @@ obj-y += errno.o
 obj-y += display_options.o
 obj-$(CONFIG_BCH) += bch.o
 obj-y += crc32.o
+obj-$(CONFIG_ROCKCHIP) += crc32_rk.o
 obj-y += ctype.o
 obj-y += div64.o
 obj-y += hang.o
@@ -68,5 +70,6 @@ obj-$(CONFIG_TRACE) += trace.o
 obj-$(CONFIG_LIB_UUID) += uuid.o
 obj-y += vsprintf.o
 obj-$(CONFIG_LIB_RAND) += rand.o
+obj-$(CONFIG_OPTEE_CLIENT) += optee_clientApi/
 
 subdir-ccflags-$(CONFIG_CC_OPTIMIZE_LIBS_FOR_SPEED) += -O2

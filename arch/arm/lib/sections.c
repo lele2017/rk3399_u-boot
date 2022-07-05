@@ -28,3 +28,5 @@ char __rel_dyn_end[0] __attribute__((section(".__rel_dyn_end")));
 char __secure_start[0] __attribute__((section(".__secure_start")));
 char __secure_end[0] __attribute__((section(".__secure_end")));
 char _end[0] __attribute__((section(".__end")));
+/* rockchip uboot loader tag */
+char __loader_tag[0] __attribute__((section(".__loader_tag")));
